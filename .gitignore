@@ -1,0 +1,41 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+.eggs/
+# Virtual envs
+.venv/
+venv/
+# Env & secrets
+.env
+.env.local
+*.key
+# Logs & runtime data (keep dirs via .gitkeep)
+logs/*.log
+logs/*.jsonl
+data/*.csv
+data/*.parquet
+reports/*
+!reports/.gitkeep
+!logs/.gitkeep
+!data/.gitkeep
+# Build / dist
+build/
+dist/
+*.spec.bak
+*.exe
+# OS / IDE
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
+# Test / coverage
+.pytest_cache/
+.coverage
+htmlcov/
+# mypy / ruff
+.mypy_cache/
+.ruff_cache/
+# ...except the committed synthetic demo sample
+!data/sample_*.csv
