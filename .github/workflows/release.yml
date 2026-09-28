@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: write
+
+jobs:
+  build-windows:
+    name: Build ZeroTraceFXAI.exe
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.13"
+      - name: Install dependencies
+        run: |
+          python -m pip install --upgrade pip
+          pip install -r requirements.txt
+          pip install pyinstaller
+      - name: Run test-suite
+        run: python -m pytest tests/ -q
+      - name: Build executable
+        run: pyinstaller --noconfirm zerotrace.spec
+      - name: Package artefact
+        run: |
+          Compress-Archive -Path dist\ZeroTraceFXAI\* -DestinationPath ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+          Copy-Item .env.example dist\.env.example
+      - name: Upload artefact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ZeroTraceFXAI-windows
+          path: ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+          retention-days: 30
+      - name: Create GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+          generate_release_notes: true
+          body: |
+            ## ZeroTrace FX AI ${{ github.ref_name }}
+            Institutional Smart Money Autonomous Forex Trading Platform.
+            See CHANGELOG.md for details. **Trading forex involves substantial risk of loss.**
