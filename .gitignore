@@ -14,6 +14,7 @@ venv/
 # Logs & runtime data (keep dirs via .gitkeep)
 logs/*.log
 logs/*.jsonl
+logs/*.csv
 data/*.csv
 data/*.parquet
 reports/*
