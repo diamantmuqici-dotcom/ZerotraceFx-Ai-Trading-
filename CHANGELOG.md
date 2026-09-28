@@ -4,6 +4,22 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.0.2] - 2026-09-28
+
+### Fixed
+
+- Made the tagged Windows release build more resilient with Python 3.11,
+  pip dependency caching, full Git history, and best-effort installation of
+  optional PySide6 and MetaTrader5 packages.
+- Added an explicit check that the Windows executable exists before packaging.
+
+### Added
+
+- Publish both the Windows application ZIP and source ZIP as workflow artifacts
+  and GitHub release assets.
+- Documented the current Android/APK limitations and supported mobile access
+  options in [docs/MOBILE.md](docs/MOBILE.md).
+
 ## [1.0.0] - 2026-09-28
 
 First production release: the complete institutional Smart Money autonomous
