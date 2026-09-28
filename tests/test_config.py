@@ -4,7 +4,7 @@ from __future__ import annotations
 import json
 
 from config.constants import APP_NAME, APP_VERSION, DEFAULT_SYMBOLS
-from config.settings import Settings, get_settings, reset_settings
+from config.settings import Settings, env_file_status, get_settings, reset_settings
 from core.events import Event, get_event_bus
 from core.state import RuntimeState
 from utils.journal import TradeJournal
@@ -13,7 +13,7 @@ from utils.journal import TradeJournal
 def test_app_constants():
     """Product identity constants are set."""
     assert APP_NAME == "ZeroTrace FX AI"
-    assert APP_VERSION == "1.2.1"
+    assert APP_VERSION == "1.2.2"
     assert DEFAULT_SYMBOLS == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
 
 
@@ -105,3 +105,38 @@ def test_trade_journal_records(tmp_path):
     assert len(lines) == 4
     assert json.loads(lines[0])["event"] == "SIGNAL"
     assert "CLOSE" in (tmp_path / "journal.csv").read_text()
+
+
+def test_env_file_status_found(tmp_path, monkeypatch):
+    """A real .env is reported as found with its path."""
+    from config import settings as settings_module
+
+    (tmp_path / ".env").write_text("ACCOUNT_MODE=LIVE\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(settings_module, "app_dir", lambda: str(tmp_path))
+    status, path = env_file_status()
+    assert status == "found"
+    assert path == str(tmp_path / ".env")
+
+
+def test_env_file_status_misnamed_env_txt(tmp_path, monkeypatch):
+    """.env.txt (the Windows Notepad gotcha) is flagged as misnamed."""
+    from config import settings as settings_module
+
+    (tmp_path / ".env.txt").write_text("ACCOUNT_MODE=LIVE\n", encoding="utf-8")
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(settings_module, "app_dir", lambda: str(tmp_path))
+    status, path = env_file_status()
+    assert status == "misnamed"
+    assert path and path.endswith(".env.txt")
+
+
+def test_env_file_status_missing(tmp_path, monkeypatch):
+    """No .env anywhere means the app silently runs on PAPER defaults."""
+    from config import settings as settings_module
+
+    monkeypatch.chdir(tmp_path)
+    monkeypatch.setattr(settings_module, "app_dir", lambda: str(tmp_path))
+    status, path = env_file_status()
+    assert status == "missing"
+    assert path is None

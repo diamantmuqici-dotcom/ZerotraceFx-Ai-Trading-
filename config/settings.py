@@ -1,6 +1,8 @@
 """Environment-driven application settings (pydantic-settings, `.env` file)."""
 from __future__ import annotations
 
+import os
+import sys
 from functools import lru_cache
 from typing import Optional
 
@@ -8,11 +10,50 @@ from pydantic import Field
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
+def app_dir() -> str:
+    """Directory the app runs from (exe folder when frozen, repo root otherwise)."""
+    if getattr(sys, "frozen", False):
+        return os.path.dirname(os.path.abspath(sys.executable))
+    return os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+
+
+def find_env_file() -> Optional[str]:
+    """Locate the active `.env`: current directory first, then the app directory.
+
+    Returns None when no `.env` exists anywhere - the app then runs on
+    built-in defaults, which is exactly the silent "why is it PAPER?"
+    trap this helper exists to expose.
+    """
+    for candidate in (os.path.abspath(".env"),
+                      os.path.join(app_dir(), ".env")):
+        if os.path.isfile(candidate):
+            return candidate
+    return None
+
+
+def env_file_status() -> tuple[str, Optional[str]]:
+    """Classify the `.env` situation for diagnostics.
+
+    Returns ``("found", path)`` / ``("missing", None)`` /
+    ``("misnamed", path_of_env_txt)`` - the last one is the classic
+    Windows Notepad gotcha where the file was saved as ``.env.txt``
+    and is therefore never read.
+    """
+    found = find_env_file()
+    if found:
+        return "found", found
+    for candidate in (os.path.abspath(".env.txt"),
+                      os.path.join(app_dir(), ".env.txt")):
+        if os.path.isfile(candidate):
+            return "misnamed", candidate
+    return "missing", None
+
+
 class Settings(BaseSettings):
     """All tunable behaviour of ZeroTrace FX AI. No hardcoded strategy values."""
 
     model_config = SettingsConfigDict(
-        env_file=".env", env_file_encoding="utf-8", extra="ignore"
+        env_file=find_env_file() or ".env", env_file_encoding="utf-8", extra="ignore"
     )
 
     # --- Account / mode ---

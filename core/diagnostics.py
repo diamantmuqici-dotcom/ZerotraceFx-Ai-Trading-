@@ -7,10 +7,12 @@ the risk-manager locks. Each line is printed as ``[ ok ] / [warn] / [FAIL]``.
 """
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from config.settings import env_file_status
 from core.types import MarketState
 from market.filters import current_sessions, is_session_allowed, session_strength
 from utils.common import utcnow
@@ -41,6 +43,22 @@ async def collect(engine: Any) -> list[Check]:
     checks: list[Check] = []
     settings = engine.settings
     now = utcnow()
+
+    # --- config file ------------------------------------------------------
+    env_status, env_path = env_file_status()
+    if env_status == "misnamed":
+        checks.append(Check("config", FAIL,
+                            f"{os.path.basename(env_path or '.env.txt')} found but no "
+                            ".env - Windows Notepad saved it with a .txt extension, so "
+                            "the app never reads it. Rename the file to exactly `.env` "
+                            "(no extension) next to main.py / ZeroTraceFXAI.exe."))
+    elif env_status == "missing":
+        checks.append(Check("config", FAIL,
+                            "no .env found - the app is running on built-in defaults "
+                            "(PAPER mode). Copy .env.example to .env next to main.py "
+                            "(or ZeroTraceFXAI.exe) and set ACCOUNT_MODE=LIVE."))
+    else:
+        checks.append(Check("config", OK, f"config loaded from {env_path}"))
 
     # --- venue / mode ---------------------------------------------------
     if settings.mode == "LIVE":
