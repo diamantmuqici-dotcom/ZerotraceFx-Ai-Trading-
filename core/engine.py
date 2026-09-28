@@ -137,11 +137,20 @@ class ZeroTraceEngine:
         )
 
     def _preload_csv_feeds(self) -> int:
-        """Load data/{SYMBOL}_{TF}.csv files into the offline feeds."""
+        """Load data/{SYMBOL}_{TF}.csv files into the offline feeds.
+
+        Also accepts the bundled ``sample_{SYMBOL}_{TF}.csv`` naming so a
+        fresh checkout has working paper pricing out of the box.
+        """
         loaded = 0
         for symbol in self.settings.symbol_list:
             for timeframe in MTF_ORDER:
                 path = os.path.join(self.settings.data_dir, f"{symbol}_{timeframe}.csv")
+                if not os.path.exists(path):
+                    alt = os.path.join(
+                        self.settings.data_dir, f"sample_{symbol}_{timeframe}.csv")
+                    if os.path.exists(alt):
+                        path = alt
                 if os.path.exists(path):
                     try:
                         if self.data.load_csv(symbol, timeframe, path) > 0:

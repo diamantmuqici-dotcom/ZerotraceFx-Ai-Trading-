@@ -13,13 +13,15 @@ from utils.journal import TradeJournal
 def test_app_constants():
     """Product identity constants are set."""
     assert APP_NAME == "ZeroTrace FX AI"
-    assert APP_VERSION == "1.2.0"
+    assert APP_VERSION == "1.2.1"
     assert DEFAULT_SYMBOLS == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
 
 
 def test_settings_defaults():
     """Defaults match the institutional specification."""
-    settings = Settings()
+    # _env_file=None: a developer's local .env (ACCOUNT_MODE=LIVE, ...)
+    # must not change what the *defaults* are.
+    settings = Settings(_env_file=None)
     assert settings.mode == "PAPER"
     assert settings.symbol_list == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
     assert settings.confidence_threshold == 85.0

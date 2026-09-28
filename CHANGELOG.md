@@ -4,6 +4,18 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.1] - 2026-09-28
+
+### Fixed
+- **Paper mode ignored the bundled sample data**: `ZeroTraceEngine._preload_csv_feeds()`
+  only looked for `data/{SYMBOL}_{TF}.csv`, so the committed
+  `data/sample_*.csv` feeds were never loaded and every symbol reported
+  "no M5 bars". It now falls back to the `sample_{SYMBOL}_{TF}.csv` naming,
+  so a fresh checkout has working paper pricing out of the box.
+- `test_settings_defaults` no longer breaks when a developer has a local
+  `.env` (e.g. `ACCOUNT_MODE=LIVE`) in the repo root: defaults are now
+  asserted with `Settings(_env_file=None)`.
+
 ## [1.2.0] - 2026-09-28
 
 ### Fixed
