@@ -22,9 +22,21 @@ Backtest report pipeline running on the bundled synthetic demo data
 
 ![Sample backtest equity curve on synthetic demo data](assets/backtest_demo.png)
 
-The Windows desktop app ships a dark institutional dashboard (balance, equity,
-basket PnL/target, win rate, drawdown, positions, live equity curve, trade
-history) that launches directly from `ZeroTraceFXAI.exe`.
+The Windows desktop app ships a dark institutional terminal — KPI strip
+(balance, equity, floating/daily PnL, win rate, drawdown), basket control
+panel with target progress, AI confidence gauge with per-rule reasoning,
+live equity + drawdown charts, positions and trade history — that launches
+directly from `ZeroTraceFXAI.exe`.
+
+![ZeroTrace FX AI desktop terminal](assets/dashboard_preview.png)
+
+Want to see the terminal without installing MetaTrader 5? Run the simulated
+preview (same widgets, synthetic feed):
+
+```powershell
+python -m dashboard.demo                 # animated preview
+python -m dashboard.demo --screenshot out.png --size 1600x1000
+```
 
 ## Features
 

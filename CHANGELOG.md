@@ -4,6 +4,29 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Changed
+- **Dashboard redesign** (`dashboard/theme.py`, `dashboard/widgets.py`,
+  `dashboard/app.py`): the desktop UI is now a dark institutional terminal —
+  shared design tokens with the Android companion, header bar with live
+  status pill and UTC clock, six-card KPI strip with equity sparkline,
+  workspace tabs (positions / equity + drawdown charts / history / AI
+  reasoning), and a control rail with basket progress, AI confidence gauge
+  and risk panel. Tables gained tinted side badges, zebra rows and monospace
+  numerics; close-all now asks for confirmation; a kill-switch banner spans
+  the window when risk latches.
+- `dashboard.app.launch_dashboard` is now a thin wrapper around the new
+  `create_application()` factory so headless tooling can build the window
+  without entering the event loop.
+
+### Added
+- `python -m dashboard.demo` — animated dashboard preview driven by a
+  simulated market feed (also renders PNG screenshots for UI work).
+- `assets/dashboard_preview.png` terminal screenshot for the README.
+- `tests/test_dashboard.py` — design-token, formatting and demo-feed
+  contracts (snapshot keys mirror `RuntimeState.snapshot`).
+
 ## [1.1.0] - 2026-09-28
 
 ### Added
