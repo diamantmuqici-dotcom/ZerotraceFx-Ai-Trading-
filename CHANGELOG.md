@@ -26,7 +26,9 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
 - `python main.py doctor` — gate-by-gate "why isn't it trading?" report:
   mode/venue, MT5 connection and demo-vs-real account type, symbol data
   freshness, spread/news/session filters, AI confidence vs threshold and
-  risk locks (`core/diagnostics.py`).
+  risk locks (`core/diagnostics.py`). The same report is available in the
+  dashboard's new **Diagnostics** tab (runs off the UI thread, auto-runs on
+  first open, `DashboardViewModel(on_diagnostics=...)`).
 - `assets/dashboard_preview.png` terminal screenshot for the README.
 - `tests/test_dashboard.py` — design-token, formatting and demo-feed
   contracts (snapshot keys mirror `RuntimeState.snapshot`).

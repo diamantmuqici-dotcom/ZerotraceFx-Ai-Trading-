@@ -8,6 +8,15 @@ from dashboard import theme
 from dashboard.demo import SimulatedFeed
 
 
+def test_viewmodel_diagnostics_hook_is_optional():
+    from core.state import RuntimeState
+    from dashboard.viewmodel import DashboardViewModel
+
+    assert DashboardViewModel(RuntimeState()).diagnostics() == ""
+    wired = DashboardViewModel(RuntimeState(), on_diagnostics=lambda: "report")
+    assert wired.diagnostics() == "report"
+
+
 def test_palette_tokens_are_hex():
     for value in (theme.BG, theme.SURFACE, theme.ACCENT, theme.LOSS, theme.WARN):
         assert value.startswith("#") and len(value) == 7

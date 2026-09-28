@@ -108,6 +108,25 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
         fig.tight_layout(pad=1.1, h_pad=1.6)
 
     # ------------------------------------------------------------------
+    # diagnostics worker (runs the report off the UI thread)
+    # ------------------------------------------------------------------
+    class _DiagThread(QtCore.QThread):
+        done = QtCore.Signal(str)
+
+        def __init__(self, vm: DashboardViewModel) -> None:
+            super().__init__()
+            self.vm = vm
+
+        def run(self) -> None:
+            try:
+                text = self.vm.diagnostics()
+            except Exception as exc:  # noqa: BLE001 - report, never crash
+                text = f"Diagnostics failed: {exc}"
+            self.done.emit(text or (
+                "Diagnostics are not wired in this mode.\n"
+                "Run `python main.py doctor` from the repo folder instead."))
+
+    # ------------------------------------------------------------------
     # window
     # ------------------------------------------------------------------
     class _MainWindow(QtWidgets.QMainWindow):
@@ -152,6 +171,8 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
             self.clock_timer = QtCore.QTimer(self)
             self.clock_timer.timeout.connect(self._tick_clock)
             self.clock_timer.start(1000)
+            self._diag_loaded = False
+            self._diag_thread = None
             self.timer = QtCore.QTimer(self)
             self.timer.timeout.connect(self.refresh)
             self.timer.start(refresh_ms)
@@ -338,6 +359,32 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
             reason_layout.addWidget(scroll, 1)
             self.tabs.addTab(reason_wrap, "AI Reasoning")
 
+            # diagnostics ("why isn't it trading?")
+            diag_wrap = QtWidgets.QWidget()
+            diag_layout = QtWidgets.QVBoxLayout(diag_wrap)
+            diag_layout.setContentsMargins(14, 12, 14, 12)
+            diag_layout.setSpacing(10)
+            diag_head = QtWidgets.QHBoxLayout()
+            diag_head.addWidget(W.SectionTitle("Gate-by-gate report"))
+            diag_head.addStretch(1)
+            self.btn_diag = QtWidgets.QPushButton("Run")
+            self.btn_diag.setObjectName("ghost")
+            self.btn_diag.setFixedSize(96, 28)
+            self.btn_diag.clicked.connect(self._run_diagnostics)
+            diag_head.addWidget(self.btn_diag)
+            diag_layout.addLayout(diag_head)
+            self.diag_view = QtWidgets.QTextEdit()
+            self.diag_view.setObjectName("diagView")
+            self.diag_view.setReadOnly(True)
+            self.diag_view.setPlainText(
+                "Click “Run Diagnostics” (or run `python main.py doctor` in the "
+                "repo folder) to see every gate between the market and an order: "
+                "mode/venue, MT5 connection and demo-vs-real, symbol data, "
+                "spread/news/session filters, AI confidence and risk locks.")
+            diag_layout.addWidget(self.diag_view, 1)
+            self._diag_tab_index = self.tabs.addTab(diag_wrap, "Diagnostics")
+            self.tabs.currentChanged.connect(self._on_tab_changed)
+
             left.addWidget(panel, 1)
 
             # ---------------- right rail ----------------
@@ -511,6 +558,24 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
             self.vm.reset_kill_switch()
             self.statusBar().showMessage("Kill switch reset by operator", 8000)
             self.refresh()
+
+        def _on_tab_changed(self, index: int) -> None:
+            if index == self._diag_tab_index and not self._diag_loaded:
+                self._run_diagnostics()
+
+        def _run_diagnostics(self) -> None:
+            self._diag_loaded = True
+            self.btn_diag.setEnabled(False)
+            self.btn_diag.setText("Running…")
+            self.diag_view.setPlainText("Collecting gates…")
+            self._diag_thread = _DiagThread(self.vm)
+            self._diag_thread.done.connect(self._show_diagnostics)
+            self._diag_thread.start()
+
+        def _show_diagnostics(self, text: str) -> None:
+            self.diag_view.setPlainText(text)
+            self.btn_diag.setEnabled(True)
+            self.btn_diag.setText("Re-run")
 
         def _tick_clock(self) -> None:
             now = datetime.now(timezone.utc)

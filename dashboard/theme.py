@@ -291,6 +291,10 @@ QTextEdit, QPlainTextEdit {{
     color: {TEXT};
     font-size: 12px;
 }}
+QTextEdit#diagView {{
+    font-family: 'Cascadia Mono', 'Consolas', 'SF Mono', 'DejaVu Sans Mono', monospace;
+    font-size: 11px;
+}}
 QMessageBox {{ background-color: {SURFACE}; }}
 QMessageBox QLabel {{ color: {TEXT}; font-size: 13px; }}
 QMessageBox QPushButton {{ min-width: 96px; }}

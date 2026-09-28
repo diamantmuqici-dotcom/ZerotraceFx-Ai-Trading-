@@ -91,6 +91,11 @@ def cmd_dashboard() -> int:
     def _reset_kill() -> None:
         engine.risk.reset_kill_switch()
 
+    def _diagnostics() -> str:
+        from core.diagnostics import collect, render
+
+        return render(asyncio.run(collect(engine)))
+
     worker = threading.Thread(target=_loop, daemon=True)
     worker.start()
     engine.start_remote_api()
@@ -98,7 +103,8 @@ def cmd_dashboard() -> int:
         from dashboard.app import launch_dashboard
 
         vm = DashboardViewModel(engine.state, on_pause=_pause,
-                                on_close_all=_close_all, on_reset_kill=_reset_kill)
+                                on_close_all=_close_all, on_reset_kill=_reset_kill,
+                                on_diagnostics=_diagnostics)
         return launch_dashboard(vm)
     finally:
         engine.state.update(running=False)

@@ -177,6 +177,27 @@ class SimulatedFeed:
     def reset_kill_switch(self) -> None:
         self.kill_switch = False
 
+    def diagnostics(self) -> str:
+        """Canned gate report so the Diagnostics tab is populated in previews."""
+        from core.diagnostics import OK, WARN, Check, render
+
+        snap = self.snapshot()
+        conf = snap["last_confidence"]
+        checks = [
+            Check("mode", WARN,
+                  "preview feed - simulated market, no venue attached "
+                  "(run `python main.py doctor` against the real engine)"),
+            Check("mt5", OK, "n/a in preview"),
+            Check(snap.get("active_symbol") or "EURUSD",
+                  OK if conf >= 85 else WARN,
+                  f"confidence {conf:.1f} of 85 required - last signal "
+                  f"{snap['last_signal']}"),
+            Check("risk", OK,
+                  f"drawdown {snap['drawdown_pct']:.2f}%, no locks, "
+                  f"{len(snap['open_positions'])} open positions"),
+        ]
+        return render(checks)
+
 
 def run_demo(viewmodel: Optional[SimulatedFeed] = None, refresh_ms: int = 700,
              screenshot: str = "", size: tuple[int, int] = (1600, 1000),
@@ -198,6 +219,10 @@ def run_demo(viewmodel: Optional[SimulatedFeed] = None, refresh_ms: int = 700,
         for _ in range(3):
             feed.tick()
             window.refresh()
+        thread = getattr(window, "_diag_thread", None)
+        if thread is not None:  # let a pending diagnostics run land in the shot
+            thread.wait(3000)
+        app.processEvents()
         app.processEvents()
         window.grab().save(screenshot)
         print(f"saved {screenshot}")
