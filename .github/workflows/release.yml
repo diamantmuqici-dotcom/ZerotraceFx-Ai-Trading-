@@ -15,17 +15,22 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.13"
+          python-version: "3.11"
       - name: Install dependencies
+        shell: pwsh
         run: |
           python -m pip install --upgrade pip
           pip install -r requirements.txt
           pip install pyinstaller
+          pip install PySide6 --only-binary=:all: 2>&1 | Out-String
+          pip install MetaTrader5 --only-binary=:all: 2>&1 | Out-String
+          Write-Host "Deps installed (MT5 optional)"
       - name: Run test-suite
         run: python -m pytest tests/ -q
       - name: Build executable
         run: pyinstaller --noconfirm zerotrace.spec
       - name: Package artefact
+        shell: pwsh
         run: |
           Compress-Archive -Path dist\ZeroTraceFXAI\* -DestinationPath ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
           Copy-Item .env.example dist\.env.example
@@ -44,3 +49,7 @@ jobs:
             ## ZeroTrace FX AI ${{ github.ref_name }}
             Institutional Smart Money Autonomous Forex Trading Platform.
             See CHANGELOG.md for details. **Trading forex involves substantial risk of loss.**
+
+            ### Downloads
+            - `ZeroTraceFXAI-*-windows.zip` — Windows desktop app (includes .exe, runs without Python)
+            - Source code (zip/tar.gz) — run from source via `python main.py dashboard`
