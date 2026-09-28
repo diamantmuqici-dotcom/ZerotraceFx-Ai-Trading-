@@ -143,6 +143,19 @@ class MT5Client:
             logger.error("account_info error: %s", exc)
             return None
 
+    def raw_account_info(self) -> Optional[Any]:
+        """Full MT5 account struct (adds ``trade_mode``: 0 real, 1 contest, 2 demo).
+
+        Used by ``python main.py doctor`` to tell demo money from real money.
+        """
+        if not self.is_connected() or mt5 is None:
+            return None
+        try:
+            return mt5.account_info()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("account_info error: %s", exc)
+            return None
+
     def symbol_spec(self, symbol: str) -> Optional[dict[str, Any]]:
         """Broker contract specification for a symbol, or None."""
         if not self.is_connected() or mt5 is None:

@@ -87,6 +87,7 @@ pip install -r requirements.txt
 copy .env.example .env
 python main.py dashboard   # desktop UI
 python main.py trade       # headless PAPER/LIVE loop
+python main.py doctor      # why isn't it trading? gate-by-gate report
 python main.py backtest --symbol EURUSD --csv data/sample_EURUSD_M5.csv
 python -m pytest tests/ -q # ~100 tests, must be all green
 ```

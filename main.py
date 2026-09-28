@@ -5,6 +5,7 @@ Modes:
   trade      run the headless trading loop (PAPER or LIVE from .env)
   backtest   run a historical simulation from data/{SYMBOL}_M5.csv
              (add --learn to train the AI memory from simulated trades)
+  doctor     explain gate-by-gate why the engine is or isn't trading
   ai         show what the adaptive AI has learned
   version    print the version and exit
 """
@@ -104,6 +105,24 @@ def cmd_dashboard() -> int:
         engine.shutdown()
 
 
+def cmd_doctor() -> int:
+    """Print a gate-by-gate report explaining why the engine is/isn't trading."""
+    import asyncio
+
+    from core.diagnostics import collect, render
+    from core.engine import ZeroTraceEngine
+
+    settings = get_settings()
+    engine = ZeroTraceEngine(settings)
+    engine.connect()
+    try:
+        report = asyncio.run(collect(engine))
+    finally:
+        engine.shutdown()
+    print(render(report))
+    return 0
+
+
 def cmd_backtest(args: argparse.Namespace) -> int:
     """Run a backtest from an M5 CSV file and print the performance report."""
     import pandas as pd
@@ -172,6 +191,7 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--learn", action="store_true",
                     help="Train the persistent AI memory from every simulated trade")
     sub.add_parser("ai", help="Show what the adaptive AI has learned so far")
+    sub.add_parser("doctor", help="Diagnose why the engine is not trading")
     return parser
 
 
@@ -198,6 +218,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_trade()
     if mode == "ai":
         return cmd_ai()
+    if mode == "doctor":
+        return cmd_doctor()
     if mode == "backtest":
         return cmd_backtest(args)
     return cmd_dashboard()
