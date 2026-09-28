@@ -48,3 +48,39 @@ jobs:
         run: python -m pytest tests/ -q
       - name: CLI smoke test
         run: python main.py version
+
+  android:
+    name: Build Android companion APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v5
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Point Gradle at the preinstalled Android SDK
+        run: |
+          SDK="${ANDROID_SDK_ROOT:-${ANDROID_HOME:-/usr/local/lib/android/sdk}}"
+          echo "sdk.dir=$SDK" > android/local.properties
+          yes | "$SDK/cmdline-tools/latest/bin/sdkmanager" --licenses > /dev/null || true
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        working-directory: android
+        env:
+          ZT_VERSION_NAME: ci
+          ZT_VERSION_CODE: ${{ github.run_number }}
+        run: |
+          set -o pipefail
+          if ! gradle --no-daemon --console=plain assembleDebug 2>&1 | tee gradle.log; then
+            grep -E "error:|What went wrong|FAILURE|Exception|> " gradle.log | head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          fi
+
