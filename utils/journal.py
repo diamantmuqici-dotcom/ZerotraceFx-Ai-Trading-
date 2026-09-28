@@ -96,3 +96,42 @@ class TradeJournal:
         record.update({k: v for k, v in detail.items()})
         with open(self.jsonl_path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, default=str) + "\n")
+
+    def read_closes(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
+        """Closed-trade history (oldest first), rebuilt from the journal.
+
+        Used to re-seed the dashboard History tab after a restart so the
+        session's realised trades survive process restarts.
+        """
+        rows: list[dict[str, Any]] = []
+        if not os.path.exists(self.jsonl_path):
+            return rows
+        with open(self.jsonl_path, "r", encoding="utf-8") as fh:
+            for line in fh:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    record = json.loads(line)
+                except json.JSONDecodeError:  # tolerate torn lines
+                    continue
+                event = str(record.get("event", ""))
+                if event == "CLOSE":
+                    rows.append({
+                        "time": str(record.get("time", "")),
+                        "symbol": str(record.get("symbol", "")),
+                        "action": f"{record.get('action', '')} {record.get('reason', '') or 'CLOSE'}".strip(),
+                        "profit": float(record.get("profit", 0.0) or 0.0),
+                        "reason": f"#{record.get('ticket', '')} {record.get('reason', '')}".strip(),
+                    })
+                elif event.startswith("BASKET_") and "profit" in record:
+                    rows.append({
+                        "time": str(record.get("time", "")),
+                        "symbol": "BASKET",
+                        "action": event.replace("BASKET_", "CLOSE "),
+                        "profit": float(record.get("profit", 0.0) or 0.0),
+                        "reason": str(record.get("reason", event)),
+                    })
+        if limit is not None:
+            rows = rows[-limit:]
+        return rows

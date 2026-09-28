@@ -57,14 +57,27 @@ async def collect(engine: Any) -> list[Check]:
                                 "MetaTrader5 python package not importable "
                                 "(needs Windows + `pip install MetaTrader5`)"))
         elif not engine.mt5.is_connected():
-            checks.append(Check("mt5", FAIL,
-                                "terminal not connected - start MT5 and check "
-                                "MT5_LOGIN/MT5_SERVER in .env"))
+            info = engine.mt5.terminal_info()
+            if info is not None:
+                checks.append(Check("mt5", WARN,
+                                    f"terminal running (build {getattr(info, 'build', '?')}) "
+                                    "but session not initialised - check MT5_LOGIN/MT5_SERVER"))
+            elif engine.mt5.terminal_process_running():
+                checks.append(Check("mt5", WARN,
+                                    "terminal64.exe process is running but initialize() "
+                                    "failed - restart MT5 or set MT5_PATH to terminal64.exe"))
+            else:
+                checks.append(Check("mt5", FAIL,
+                                    "MetaTrader 5 terminal is NOT running - start it (or set "
+                                    "MT5_PATH so initialize() can launch it), then retry"))
         else:
             raw = engine.mt5.raw_account_info()
             kind = TRADE_MODES.get(int(getattr(raw, "trade_mode", -1)), "unknown type")
+            info = engine.mt5.terminal_info()
+            build = getattr(info, "build", "?") if info is not None else "?"
             checks.append(Check("mt5", OK,
-                                f"connected - login {getattr(raw, 'login', '?')} @ "
+                                f"terminal running (build {build}) - login "
+                                f"{getattr(raw, 'login', '?')} @ "
                                 f"{getattr(raw, 'server', '?')} ({kind})"))
     else:
         checks.append(Check("mt5", WARN if engine.mt5.is_connected() else OK,
@@ -87,6 +100,13 @@ async def collect(engine: Any) -> list[Check]:
         checks.append(Check("risk", WARN,
                             f"max positions reached ({len(open_positions)}/"
                             f"{settings.max_positions})"))
+    closes = engine.journal.read_closes()
+    checks.append(Check("history", OK if closes else WARN,
+                        f"{len(closes)} realised trade(s) in journal - the History tab "
+                        "shows the latest 20 and survives restarts"
+                        if closes else
+                        "no closed trades journaled yet - History fills after the "
+                        "first position closes"))
 
     # --- per symbol --------------------------------------------------------
     sessions = current_sessions(now)

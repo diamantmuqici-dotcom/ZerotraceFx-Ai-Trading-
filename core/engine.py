@@ -86,6 +86,25 @@ class ZeroTraceEngine:
             learner=self.learner,
         )
         self.state.update(ai_trades_learned=self.learner.state.trades_learned)
+        self.seed_history()
+
+    def seed_history(self, recent: int = 20) -> int:
+        """Re-populate dashboard history/win-rate from the on-disk journal.
+
+        Without this every restart shows an empty History tab even though
+        ``logs/journal.*`` holds every realised trade.
+        """
+        closes = self.journal.read_closes()
+        if not closes:
+            return 0
+        self.state.recent_trades = list(reversed(closes[-recent:]))
+        wins = sum(1 for row in closes if row["profit"] > 0)
+        self.state.update(
+            total_trades=len(closes),
+            winning_trades=wins,
+            win_rate=100.0 * wins / len(closes),
+        )
+        return len(closes)
 
     def connect(self) -> bool:
         """Connect the venue and preload offline CSV data for paper mode."""
@@ -146,7 +165,11 @@ class ZeroTraceEngine:
         self.journal.record_basket("MANUAL_CLOSE", {
             "closed": outcome.closed, "failed": outcome.failed,
             "profit": round(outcome.total_profit, 2),
+            "reason": "operator close-all",
         })
+        if outcome.closed:
+            self.trader.adopt_manual_close(
+                outcome.total_profit, f"operator close-all ({outcome.closed} positions)")
         return {"requested": outcome.requested, "closed": outcome.closed,
                 "failed": outcome.failed, "message": outcome.message}
 

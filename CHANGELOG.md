@@ -4,7 +4,16 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [1.2.0] - 2026-09-28
+
+### Fixed
+- **Trade history survived nothing**: the History tab was in-memory only, so
+  every restart showed an empty list. `ZeroTraceEngine.seed_history()` now
+  re-populates it (and the win-rate/trade counters) from `logs/journal.*`
+  at startup, via the new `TradeJournal.read_closes()`.
+- Operator **Close All** (dashboard button / Android app) flattened the book
+  without ever reaching history or the risk counters; it now books one
+  `MANUAL CLOSE` row exactly once (`LiveTrader.adopt_manual_close`).
 
 ### Changed
 - **Dashboard redesign** (`dashboard/theme.py`, `dashboard/widgets.py`,
@@ -29,6 +38,13 @@ and the project adheres to [Semantic Versioning](https://semver.org/).
   risk locks (`core/diagnostics.py`). The same report is available in the
   dashboard's new **Diagnostics** tab (runs off the UI thread, auto-runs on
   first open, `DashboardViewModel(on_diagnostics=...)`).
+- **MetaTrader 5 terminal detection**: doctor/diagnostics now distinguish
+  "package missing", "terminal not running" (OS process probe for
+  `terminal64.exe`), "running but not initialised" and "connected" (with
+  terminal build + login + demo/real money), via `MT5Client.terminal_info()`
+  and `MT5Client.terminal_process_running()`.
+- Journal reader `TradeJournal.read_closes()` rebuilds closed-trade history
+  (per-position closes plus basket closes) from `journal.jsonl`.
 - `assets/dashboard_preview.png` terminal screenshot for the README.
 - `tests/test_dashboard.py` — design-token, formatting and demo-feed
   contracts (snapshot keys mirror `RuntimeState.snapshot`).
