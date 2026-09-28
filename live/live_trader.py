@@ -403,6 +403,23 @@ class LiveTrader:
                 self.learner.record_outcome(ticket, profit)
                 self.state.update(ai_trades_learned=self.learner.state.trades_learned)
 
+    def adopt_manual_close(self, profit: float, reason: str) -> None:
+        """Book an operator close-all so it reaches history/risk exactly once.
+
+        Marks every tracked ticket as basket-handled (the reconciliation step
+        then skips double-booking profit) and pushes one history row.
+        """
+        for info in self._tracked.values():
+            info["basket"] = True
+        self._partialed.clear()
+        self._initial_risk.clear()
+        self.risk.record_closed_profit(profit)
+        self.state.push_trade({
+            "time": utcnow().isoformat(), "symbol": "BASKET",
+            "action": "MANUAL CLOSE", "profit": round(profit, 2),
+            "reason": reason,
+        })
+
     # -- paper pricing --------------------------------------------------------------
     async def _feed_paper_prices(self) -> None:
         """Push latest quotes into the paper broker from the data engine."""

@@ -5,6 +5,7 @@ Modes:
   trade      run the headless trading loop (PAPER or LIVE from .env)
   backtest   run a historical simulation from data/{SYMBOL}_M5.csv
              (add --learn to train the AI memory from simulated trades)
+  doctor     explain gate-by-gate why the engine is or isn't trading
   ai         show what the adaptive AI has learned
   version    print the version and exit
 """
@@ -90,6 +91,11 @@ def cmd_dashboard() -> int:
     def _reset_kill() -> None:
         engine.risk.reset_kill_switch()
 
+    def _diagnostics() -> str:
+        from core.diagnostics import collect, render
+
+        return render(asyncio.run(collect(engine)))
+
     worker = threading.Thread(target=_loop, daemon=True)
     worker.start()
     engine.start_remote_api()
@@ -97,11 +103,30 @@ def cmd_dashboard() -> int:
         from dashboard.app import launch_dashboard
 
         vm = DashboardViewModel(engine.state, on_pause=_pause,
-                                on_close_all=_close_all, on_reset_kill=_reset_kill)
+                                on_close_all=_close_all, on_reset_kill=_reset_kill,
+                                on_diagnostics=_diagnostics)
         return launch_dashboard(vm)
     finally:
         engine.state.update(running=False)
         engine.shutdown()
+
+
+def cmd_doctor() -> int:
+    """Print a gate-by-gate report explaining why the engine is/isn't trading."""
+    import asyncio
+
+    from core.diagnostics import collect, render
+    from core.engine import ZeroTraceEngine
+
+    settings = get_settings()
+    engine = ZeroTraceEngine(settings)
+    engine.connect()
+    try:
+        report = asyncio.run(collect(engine))
+    finally:
+        engine.shutdown()
+    print(render(report))
+    return 0
 
 
 def cmd_backtest(args: argparse.Namespace) -> int:
@@ -172,6 +197,7 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--learn", action="store_true",
                     help="Train the persistent AI memory from every simulated trade")
     sub.add_parser("ai", help="Show what the adaptive AI has learned so far")
+    sub.add_parser("doctor", help="Diagnose why the engine is not trading")
     return parser
 
 
@@ -198,6 +224,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_trade()
     if mode == "ai":
         return cmd_ai()
+    if mode == "doctor":
+        return cmd_doctor()
     if mode == "backtest":
         return cmd_backtest(args)
     return cmd_dashboard()

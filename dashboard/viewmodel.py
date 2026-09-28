@@ -15,12 +15,14 @@ class DashboardViewModel:
         on_pause: Optional[Callable[[bool], None]] = None,
         on_close_all: Optional[Callable[[], dict[str, Any]]] = None,
         on_reset_kill: Optional[Callable[[], None]] = None,
+        on_diagnostics: Optional[Callable[[], str]] = None,
     ) -> None:
         """Bind the shared state and optional control callbacks."""
         self.state = state
         self._on_pause = on_pause
         self._on_close_all = on_close_all
         self._on_reset_kill = on_reset_kill
+        self._on_diagnostics = on_diagnostics
 
     def snapshot(self) -> dict[str, Any]:
         """Current UI snapshot."""
@@ -43,3 +45,9 @@ class DashboardViewModel:
         self.state.update(kill_switch=False)
         if self._on_reset_kill:
             self._on_reset_kill()
+
+    def diagnostics(self) -> str:
+        """Gate-by-gate trading report; empty when not wired (e.g. demo feed)."""
+        if self._on_diagnostics is None:
+            return ""
+        return self._on_diagnostics()

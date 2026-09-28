@@ -143,6 +143,44 @@ class MT5Client:
             logger.error("account_info error: %s", exc)
             return None
 
+    def terminal_info(self) -> Optional[Any]:
+        """Raw MT5 terminal struct (build, path, connected...) or None."""
+        if not HAS_MT5 or mt5 is None:
+            return None
+        try:
+            return mt5.terminal_info()
+        except Exception:  # noqa: BLE001 - not initialised / no terminal
+            return None
+
+    @staticmethod
+    def terminal_process_running() -> bool:
+        """Best-effort OS-level probe for a running MetaTrader 5 terminal."""
+        import os
+        import subprocess
+
+        if os.name != "nt":
+            return False
+        try:
+            out = subprocess.run(
+                ["tasklist", "/NH"], capture_output=True, text=True, timeout=5,
+            ).stdout.lower()
+            return "terminal64.exe" in out or "terminal.exe" in out
+        except Exception:  # noqa: BLE001 - probe must never crash diagnostics
+            return False
+
+    def raw_account_info(self) -> Optional[Any]:
+        """Full MT5 account struct (adds ``trade_mode``: 0 real, 1 contest, 2 demo).
+
+        Used by ``python main.py doctor`` to tell demo money from real money.
+        """
+        if not self.is_connected() or mt5 is None:
+            return None
+        try:
+            return mt5.account_info()
+        except Exception as exc:  # noqa: BLE001
+            logger.error("account_info error: %s", exc)
+            return None
+
     def symbol_spec(self, symbol: str) -> Optional[dict[str, Any]]:
         """Broker contract specification for a symbol, or None."""
         if not self.is_connected() or mt5 is None:
