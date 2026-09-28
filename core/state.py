@@ -14,6 +14,7 @@ class RuntimeState:
     """Live snapshot of everything the dashboard and engine need to share."""
 
     running: bool = False
+    ai_trades_learned: int = 0
     paused: bool = False
     mode: str = AccountMode.PAPER.value
     balance: float = 0.0
@@ -112,6 +113,8 @@ class RuntimeState:
                 ],
                 "last_signal": self.last_signal,
                 "last_confidence": self.last_confidence,
+                "last_reasoning": list(self.last_reasoning),
+                "ai_trades_learned": self.ai_trades_learned,
                 "active_symbol": self.active_symbol,
                 "session": self.session,
                 "equity_curve": list(self.equity_curve),

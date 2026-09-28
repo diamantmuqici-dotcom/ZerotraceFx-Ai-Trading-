@@ -3,20 +3,23 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Callable, Optional
+from typing import TYPE_CHECKING, Callable, Optional
 
 import pandas as pd
 
 from backtest.metrics import BacktestReport, compute_report
 from config.settings import Settings
-from core.types import MarketState, MTF_ORDER, SignalAction, SymbolSpec, TradeSignal
+from core.types import MarketState, SignalAction, SymbolSpec, TradeSignal
 from market.filters import session_strength
 from market.indicators import resample_ohlc, validate_ohlc
 from risk.basket import BasketManager
 from risk.position_sizing import lots_for_risk
 from strategy.strategy import Strategy
-from utils.common import from_pips, position_profit, utcnow
+from utils.common import from_pips, position_profit
 from utils.logging_setup import get_logger
+
+if TYPE_CHECKING:  # pragma: no cover
+    from strategy.learning import AdaptiveLearner
 
 logger = get_logger("app")
 
@@ -62,6 +65,9 @@ class _SimPosition:
     entry_bar: int
     initial_risk: float
     partialed: bool = False
+    banked: float = 0.0  # net profit already realised by partial closes
+    components: dict = field(default_factory=dict)
+    risk_money: float = 0.0
 
 
 @dataclass
@@ -85,9 +91,17 @@ SignalFn = Callable[[dict[str, pd.DataFrame], int, pd.Series], Optional[TradeSig
 class BacktestEngine:
     """Bars-driven simulator: M5 execution with resampled higher timeframes."""
 
-    def __init__(self, strategy: Strategy, settings: Settings, spec: SymbolSpec) -> None:
-        """Bind the live strategy, settings and contract spec."""
+    def __init__(
+        self, strategy: Strategy, settings: Settings, spec: SymbolSpec,
+        learner: Optional["AdaptiveLearner"] = None,
+    ) -> None:
+        """Bind the live strategy, settings and contract spec.
+
+        With a learner attached, every simulated trade trains the AI memory
+        (bar-by-bar, so later signals already use what earlier trades taught).
+        """
         self.strategy = strategy
+        self.learner = learner
         self.settings = settings
         self.spec = spec
 
@@ -135,6 +149,7 @@ class BacktestEngine:
                 )
                 balance = round(balance + delta, 2)
                 if closed_trade is not None:
+                    self._learn(open_position, closed_trade)
                     result.trades.append(closed_trade)
                     open_position = None
             # --- basket target across the (single-slot) simulated book ---
@@ -145,7 +160,8 @@ class BacktestEngine:
                         open_position, close, when, i, symbol,
                         spread_price, commission, "BASKET_TARGET",
                     )
-                    balance = round(balance + trade.net, 2)
+                    balance = round(balance + trade.net - open_position.banked, 2)
+                    self._learn(open_position, trade)
                     result.trades.append(trade)
                     open_position = None
                     basket.reset()
@@ -169,6 +185,11 @@ class BacktestEngine:
                             confidence=signal.confidence, setup_id=signal.setup_id,
                             entry_bar=i,
                             initial_risk=abs(fill - signal.stop_loss),
+                            components=dict(signal.components),
+                            risk_money=(
+                                abs(fill - signal.stop_loss) / self.spec.tick_size
+                                * self.spec.tick_value * lots
+                            ) if self.spec.tick_size > 0 else 0.0,
                         )
             floating_now = self._floating(open_position, close, symbol) if open_position else 0.0
             result.equity_curve.append((when, round(balance + floating_now, 2)))
@@ -179,7 +200,8 @@ class BacktestEngine:
                 open_position, closes[-1], when, len(base) - 1, symbol,
                 spread_price, commission, "END_OF_DATA",
             )
-            balance = round(balance + trade.net, 2)
+            balance = round(balance + trade.net - open_position.banked, 2)
+            self._learn(open_position, trade)
             result.trades.append(trade)
         result.report = compute_report(
             result.trades, result.equity_curve, balance0=(
@@ -282,6 +304,7 @@ class BacktestEngine:
                                         self.spec.tick_value, self.spec.tick_size)
                 fee = slice_vol * commission
                 balance_delta += gross - fee
+                pos.banked += gross - fee
                 pos.volume = round(pos.volume - slice_vol, 8)
                 pos.partialed = True
         # Stop-loss (priority) then take-profit on the bar extremes.
@@ -302,8 +325,10 @@ class BacktestEngine:
             return None, balance_delta
         trade = self._close_position(pos, exit_px, when, bar, symbol,
                                      0.0, commission, reason)
-        trade.profit = round(trade.profit + balance_delta, 2)
-        return trade, trade.net
+        # trade.profit already includes every banked partial; only the part
+        # not yet credited to the balance is returned as this bar's delta.
+        previously_credited = pos.banked - balance_delta
+        return trade, trade.net - previously_credited
 
     def _close_position(
         self,
@@ -326,10 +351,25 @@ class BacktestEngine:
             symbol=symbol, action=pos.action, entry_time=pos.entry_time,
             exit_time=when, entry=pos.entry, exit=exit_px, volume=pos.volume,
             stop_loss=pos.stop_loss, take_profit=pos.take_profit,
-            profit=round(gross, 2), commission=round(fee, 2),
+            profit=round(gross + pos.banked, 2), commission=round(fee, 2),
             exit_reason=reason, confidence=pos.confidence,
             setup_id=pos.setup_id, bars_held=bar - pos.entry_bar,
         )
+
+
+    def _learn(self, pos: _SimPosition, trade: BacktestTrade) -> None:
+        """Feed one simulated outcome into the adaptive learner (in memory)."""
+        if self.learner is None or not pos.components:
+            return
+        from strategy.learning import PendingTrade
+
+        key = f"bt-{trade.symbol}-{pos.entry_bar}-{pos.setup_id}"
+        self.learner.state.pending[key] = PendingTrade(
+            symbol=trade.symbol.upper(), direction=pos.action.value,
+            confidence=pos.confidence, components=dict(pos.components),
+            risk_money=pos.risk_money,
+        )
+        self.learner.record_outcome(key, trade.net, persist=False)
 
 
 def _pip(symbol: str) -> float:

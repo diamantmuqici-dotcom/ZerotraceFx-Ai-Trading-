@@ -40,3 +40,13 @@ htmlcov/
 .ruff_cache/
 # ...except the committed synthetic demo sample
 !data/sample_*.csv
+
+# Android build outputs
+android/.gradle/
+android/app/build/
+android/build/
+android/local.properties
+*.apk
+dist-onefile/
+build-onefile/
+logs/ai_memory.json

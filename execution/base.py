@@ -92,6 +92,10 @@ class BrokerInterface(ABC):
         """Close every open position (and cancel pending orders)."""
         raise NotImplementedError
 
+    def closed_profit(self, ticket: str) -> Optional[float]:
+        """Realised net profit of a fully closed position, if known."""
+        return None
+
     def shutdown(self) -> None:
         """Release venue resources (optional)."""
         return None

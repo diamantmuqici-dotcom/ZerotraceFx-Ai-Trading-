@@ -294,6 +294,12 @@ class MT5Executor(BrokerInterface):
         return CloseResult(True, ticket=str(ticket), price=float(result.price),
                            profit=profit, message="closed", latency_ms=latency)
 
+    def closed_profit(self, ticket: str) -> Optional[float]:
+        """Realised net profit of a closed live position from deal history."""
+        if any(p.ticket == str(ticket) for p in self.get_positions()):
+            return None
+        return self.client.position_deals_profit(str(ticket))
+
     def close_all(self, symbol: Optional[str] = None) -> CloseAllResult:
         """Close every live position and cancel pending orders immediately."""
         outcome = CloseAllResult()

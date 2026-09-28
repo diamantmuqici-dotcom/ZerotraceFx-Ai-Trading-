@@ -1,0 +1,45 @@
+plugins {
+    id "com.android.application"
+}
+
+def envOr = { String name, String fallback ->
+    def v = System.getenv(name)
+    return (v == null || v.trim().isEmpty()) ? fallback : v.trim()
+}
+def keystorePath = envOr("ZT_KEYSTORE", "")
+
+android {
+    namespace "com.zerotrace.fxai"
+    compileSdk 34
+
+    defaultConfig {
+        applicationId "com.zerotrace.fxai"
+        minSdk 24
+        targetSdk 34
+        versionCode Integer.parseInt(envOr("ZT_VERSION_CODE", "3"))
+        versionName envOr("ZT_VERSION_NAME", "1.1.0")
+    }
+
+    if (!keystorePath.isEmpty()) {
+        signingConfigs {
+            release {
+                storeFile file(keystorePath)
+                storePassword envOr("ZT_KEYSTORE_PASSWORD", "")
+                keyAlias envOr("ZT_KEY_ALIAS", "")
+                keyPassword envOr("ZT_KEY_PASSWORD", "")
+            }
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig keystorePath.isEmpty() ? signingConfigs.debug : signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}

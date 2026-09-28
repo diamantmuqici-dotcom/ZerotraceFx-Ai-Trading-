@@ -1,7 +1,6 @@
 """Strategy orchestrator: SMC -> confluence -> entry rules -> AI score -> signal."""
 from __future__ import annotations
 
-from typing import Optional
 from uuid import uuid4
 
 import pandas as pd
@@ -17,7 +16,6 @@ from core.types import (
     TradeSignal,
 )
 from smart_money.smc_engine import SMCEngine
-from smart_money.zones import distance_to_zone_atr
 from strategy.ai_engine import AIDecisionEngine, AIDecision, AIFeatures
 from strategy.confluence import ConfluenceResult, effective_bias, evaluate_mtf_confluence
 from strategy.entry_rules import (
@@ -231,7 +229,7 @@ class Strategy:
                 mtf, direction, market, self.settings.spread_limit_pips,
                 self.settings.structure_recency_bars, self.settings.sweep_recency_bars,
             )
-            decision = self.ai.score(features)
+            decision = self.ai.score(features, symbol=symbol, session=market.session)
             if best_decision is None or decision.confidence > best_decision.confidence:
                 best_decision, best_rules = decision, rules
         assert best_decision is not None

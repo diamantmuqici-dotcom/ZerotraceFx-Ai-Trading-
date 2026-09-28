@@ -4,12 +4,11 @@ import os
 
 block_cipher = None
 
-# SPECCWD is injected by some PyInstaller versions. Fall back to the spec
-# file's directory so the spec also works when that variable is unavailable.
+# PyInstaller injects SPECPATH (the directory containing this spec file).
 try:
-    ROOT = os.path.abspath(SPECCWD)
+    ROOT = os.path.abspath(SPECPATH)  # noqa: F821 - provided by PyInstaller
 except NameError:
-    ROOT = os.path.dirname(os.path.abspath(__file__))
+    ROOT = os.path.abspath(os.getcwd())
 
 ICON = os.path.join(ROOT, "assets", "app.ico")
 
@@ -25,7 +24,8 @@ a = Analysis(
     datas=datas,
     hiddenimports=[
         "pandas", "numpy", "pydantic", "pydantic_settings", "dotenv",
-        "aiohttp", "matplotlib", "MetaTrader5", "PySide6",
+        "aiohttp", "aiohttp.web", "matplotlib", "MetaTrader5", "PySide6",
+        "remote.api", "strategy.learning",
     ],
     hookspath=[],
     runtime_hooks=[],
@@ -34,13 +34,23 @@ a = Analysis(
     noarchive=False,
 )
 pyz = PYZ(a.pure, a.zipped_data, cipher=block_cipher)
-exe = EXE(
+
+ONEFILE = os.environ.get("ZT_ONEFILE", "0") == "1"
+
+if ONEFILE:
+    # Single self-contained ZeroTraceFXAI.exe (slower first start, easy download).
+    exe = EXE(
+        pyz, a.scripts, a.binaries, a.zipfiles, a.datas, [],
+        name="ZeroTraceFXAI", debug=False, bootloader_ignore_signals=False,
+        strip=False, upx=True, console=False,
+        icon=ICON if os.path.exists(ICON) else None,
+    )
+else:
+  exe = EXE(
     pyz,
     a.scripts,
-    a.binaries,
-    a.zipfiles,
-    a.datas,
     [],
+    exclude_binaries=True,
     name="ZeroTraceFXAI",
     debug=False,
     bootloader_ignore_signals=False,
@@ -49,8 +59,8 @@ exe = EXE(
     console=False,  # windowed: launches the dashboard directly
     icon=ICON if os.path.exists(ICON) else None,
     version=None,
-)
-coll = COLLECT(
+  )
+  coll = COLLECT(
     exe, a.binaries, a.zipfiles, a.datas,
     strip=False, upx=True, name="ZeroTraceFXAI",
-)
+  )

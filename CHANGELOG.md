@@ -4,6 +4,27 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.1.0] - 2026-09-28
+
+### Added
+- **Adaptive learning engine** (`strategy/learning.py`): every closed trade
+  (TP/SL at the broker, basket close, partial + final, backtests with
+  `--learn`) updates bounded component-weight multipliers, per-symbol
+  confidence calibration and session edge. Memory persists in
+  `logs/ai_memory.json`; `python main.py ai` prints what was learned.
+- Android companion APK (remote monitor/control) and token-protected remote API
+  (`remote/api.py`, `REMOTE_API_*` settings).
+- Standalone single-file `ZeroTraceFXAI.exe` in releases, alongside the ZIP bundle.
+
+### Fixed
+- Positions closed by broker-side SL/TP were never seen by the risk manager
+  (daily loss / consecutive-loss lock) or journal; they are now reconciled
+  every cycle using realised profit (paper history / MT5 deal history).
+- Backtest trades lost the profit of earlier partial take-profits in their
+  reported P&L (balance was right, trade stats were wrong).
+- PyInstaller spec mixed one-file and one-folder modes, duplicating binaries.
+- Removed unused imports / lint errors.
+
 ## [1.0.2] - 2026-09-28
 
 ### Fixed
