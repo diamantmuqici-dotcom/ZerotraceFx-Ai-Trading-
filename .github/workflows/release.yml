@@ -131,7 +131,14 @@ jobs:
         env:
           ZT_VERSION_NAME: ${{ github.ref_name }}
           ZT_VERSION_CODE: ${{ github.run_number }}
-        run: gradle --no-daemon assembleRelease
+        run: |
+          set -o pipefail
+          if ! gradle --no-daemon --console=plain assembleRelease 2>&1 | tee gradle.log; then
+            grep -E "error:|What went wrong|FAILURE|Exception|> " gradle.log | head -40 | while IFS= read -r line; do
+              echo "::error::$line"
+            done
+            exit 1
+          fi
 
       - name: Collect APK
         run: |
