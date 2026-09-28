@@ -4,12 +4,11 @@ import os
 
 block_cipher = None
 
-# SPECCWD is injected by some PyInstaller versions. Fall back to the spec
-# file's directory so the spec also works when that variable is unavailable.
+# PyInstaller injects SPECPATH (the directory containing this spec file).
 try:
-    ROOT = os.path.abspath(SPECCWD)
+    ROOT = os.path.abspath(SPECPATH)  # noqa: F821 - provided by PyInstaller
 except NameError:
-    ROOT = os.path.dirname(os.path.abspath(__file__))
+    ROOT = os.path.abspath(os.getcwd())
 
 ICON = os.path.join(ROOT, "assets", "app.ico")
 
