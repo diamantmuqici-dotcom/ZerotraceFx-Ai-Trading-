@@ -255,6 +255,33 @@ class MT5Client:
             logger.error("open_positions error: %s", exc)
             return []
 
+    def position_deals_profit(self, ticket: str, days: int = 30) -> Optional[float]:
+        """Net realised profit (profit+commission+swap+fee) of a position's exit deals."""
+        if not self.is_connected() or mt5 is None:
+            return None
+        try:
+            from datetime import datetime, timedelta, timezone
+
+            position_id = int(ticket)
+            deals = mt5.history_deals_get(position=position_id)
+            if deals is None:
+                end = datetime.now(timezone.utc) + timedelta(days=1)
+                deals = mt5.history_deals_get(end - timedelta(days=days), end)
+                deals = [d for d in (deals or []) if int(getattr(d, "position_id", 0)) == position_id]
+            if not deals:
+                return None
+            exits = [d for d in deals if int(getattr(d, "entry", 0)) in (1, 2, 3)]
+            if not exits:
+                return None
+            total = 0.0
+            for deal in deals:
+                total += float(getattr(deal, "profit", 0.0)) + float(getattr(deal, "commission", 0.0))
+                total += float(getattr(deal, "swap", 0.0)) + float(getattr(deal, "fee", 0.0))
+            return round(total, 2)
+        except Exception as exc:  # noqa: BLE001
+            logger.debug("position_deals_profit error for %s: %s", ticket, exc)
+            return None
+
     def raw_order_send(self, request: dict[str, Any]) -> Optional[Any]:
         """Pass a raw order request to the terminal (used by the executor)."""
         if not self.is_connected() or mt5 is None:

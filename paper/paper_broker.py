@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import itertools
-import math
 from datetime import datetime
 from typing import Optional
 
@@ -51,6 +50,7 @@ class PaperBroker(BrokerInterface):
         self._tickets = itertools.count(100001)
         self._connected = False
         self._realised = 0.0
+        self._closed_profit: dict[str, float] = {}
 
     # -- connection ------------------------------------------------------
     def connect(self) -> bool:
@@ -223,6 +223,7 @@ class PaperBroker(BrokerInterface):
         position.volume = round(position.volume - lots, 8)
         self._balance = round(self._balance + net, 2)
         self._realised = round(self._realised + net, 2)
+        self._closed_profit[ticket] = round(self._closed_profit.get(ticket, 0.0) + net, 2)
         if position.volume < spec.volume_min / 2:
             del self._positions[ticket]
         else:
@@ -303,7 +304,16 @@ class PaperBroker(BrokerInterface):
         self._realised = round(self._realised + net, 2)
         logger.info("Paper %s #%s %s closed at %.5f (%+.2f)",
                     reason, position.ticket, position.symbol, level, net)
+        self._closed_profit[position.ticket] = round(
+            self._closed_profit.get(position.ticket, 0.0) + net, 2)
         del self._positions[position.ticket]
+
+    def closed_profit(self, ticket: str) -> Optional[float]:
+        """Total realised net profit booked on a ticket that is now closed."""
+        ticket = str(ticket)
+        if ticket in self._positions:
+            return None
+        return self._closed_profit.get(ticket)
 
     @property
     def realised(self) -> float:
@@ -316,3 +326,4 @@ class PaperBroker(BrokerInterface):
         self._positions.clear()
         self._prices.clear()
         self._realised = 0.0
+        self._closed_profit.clear()

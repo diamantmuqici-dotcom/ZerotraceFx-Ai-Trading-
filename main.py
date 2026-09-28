@@ -4,6 +4,8 @@ Modes:
   dashboard  launch the desktop UI (default; also the .exe target)
   trade      run the headless trading loop (PAPER or LIVE from .env)
   backtest   run a historical simulation from data/{SYMBOL}_M5.csv
+             (add --learn to train the AI memory from simulated trades)
+  ai         show what the adaptive AI has learned
   version    print the version and exit
 """
 from __future__ import annotations
@@ -40,6 +42,8 @@ def cmd_trade() -> int:
     print(f"Symbols: {', '.join(settings.symbol_list)} | "
           f"Basket target: ${settings.basket_target:,.2f} | "
           f"Confidence: {settings.confidence_threshold:.0f}")
+    if engine.start_remote_api():
+        print(f"Remote API on port {settings.remote_api_port} (Android app)")
     try:
         asyncio.run(engine.run())
     except KeyboardInterrupt:
@@ -81,20 +85,14 @@ def cmd_dashboard() -> int:
         engine.state.update(status_message="Paused by operator" if paused else "Resumed")
 
     def _close_all() -> dict:
-        outcome = engine.orders.close_all_verified()
-        engine.basket.reset()
-        engine.journal.record_basket("MANUAL_CLOSE", {
-            "closed": outcome.closed, "failed": outcome.failed,
-            "profit": round(outcome.total_profit, 2),
-        })
-        return {"requested": outcome.requested, "closed": outcome.closed,
-                "failed": outcome.failed, "message": outcome.message}
+        return engine.manual_close_all()
 
     def _reset_kill() -> None:
         engine.risk.reset_kill_switch()
 
     worker = threading.Thread(target=_loop, daemon=True)
     worker.start()
+    engine.start_remote_api()
     try:
         from dashboard.app import launch_dashboard
 
@@ -125,12 +123,18 @@ def cmd_backtest(args: argparse.Namespace) -> int:
         return 2
     frame = pd.read_csv(csv_path)
     engine = ZeroTraceEngine(settings)
-    backtester = BacktestEngine(engine.strategy, settings, default_spec(symbol))
+    backtester = BacktestEngine(
+        engine.strategy, settings, default_spec(symbol),
+        learner=engine.learner if getattr(args, "learn", False) else None,
+    )
     print(f"Backtesting {symbol} on {len(frame)} M5 bars from {csv_path} ...")
     result = backtester.run(
         symbol, frame, warmup_bars=args.warmup, signal_every=args.every,
         initial_balance=args.balance, spread_pips=args.spread,
     )
+    if getattr(args, "learn", False):
+        engine.learner.save()
+        print(f"AI memory trained: {engine.learner.state.trades_learned} trades learned in total")
     print(f"\n=== Backtest report: {symbol} ===")
     assert result.report is not None
     for line in result.report.summary_lines():
@@ -165,7 +169,22 @@ def build_parser() -> argparse.ArgumentParser:
     bt.add_argument("--every", type=int, default=3, help="Signal check stride (bars)")
     bt.add_argument("--balance", type=float, default=10000.0, help="Initial balance")
     bt.add_argument("--spread", type=float, default=1.2, help="Spread in pips")
+    bt.add_argument("--learn", action="store_true",
+                    help="Train the persistent AI memory from every simulated trade")
+    sub.add_parser("ai", help="Show what the adaptive AI has learned so far")
     return parser
+
+
+def cmd_ai() -> int:
+    """Print the adaptive learner's memory summary."""
+    import json
+
+    from strategy.learning import AdaptiveLearner
+
+    settings = get_settings()
+    learner = AdaptiveLearner(os.path.join(settings.logs_dir, settings.learning_memory_file))
+    print(json.dumps(learner.summary(), indent=2))
+    return 0
 
 
 def main(argv: list[str] | None = None) -> int:
@@ -177,6 +196,8 @@ def main(argv: list[str] | None = None) -> int:
         return cmd_version()
     if mode == "trade":
         return cmd_trade()
+    if mode == "ai":
+        return cmd_ai()
     if mode == "backtest":
         return cmd_backtest(args)
     return cmd_dashboard()

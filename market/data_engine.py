@@ -93,7 +93,7 @@ class MarketDataEngine:
         results = await asyncio.gather(
             *(self.get_candles(symbol, tf, count) for tf in frames)
         )
-        return dict(zip(frames, results))
+        return dict(zip(frames, results, strict=False))
 
     async def get_tick(self, symbol: str) -> Optional[TickData]:
         """Latest tick from MT5, else synthesised from the offline M5 close."""

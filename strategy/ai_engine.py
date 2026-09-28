@@ -2,9 +2,13 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
+from typing import TYPE_CHECKING, Optional
 
 from core.types import Direction, SignalAction
 from utils.common import clamp
+
+if TYPE_CHECKING:  # pragma: no cover
+    from strategy.learning import AdaptiveLearner
 
 DEFAULT_WEIGHTS: dict[str, float] = {
     "htf_trend": 18.0,
@@ -81,7 +85,8 @@ class AIDecisionEngine:
     """Pure weighted scorer: features in, audited decision out."""
 
     def __init__(
-        self, weights: dict[str, float] | None = None, threshold: float = 85.0
+        self, weights: dict[str, float] | None = None, threshold: float = 85.0,
+        learner: "Optional[AdaptiveLearner]" = None,
     ) -> None:
         """Configure component weights and the execution threshold."""
         self.weights = dict(weights or DEFAULT_WEIGHTS)
@@ -91,20 +96,40 @@ class AIDecisionEngine:
         # Normalise so custom weight sets still produce a 0-100 score.
         self.weights = {k: v / total * 100.0 for k, v in self.weights.items()}
         self.threshold = threshold
+        self.learner = learner
 
-    def score(self, features: AIFeatures) -> AIDecision:
-        """Score one candidate direction and explain every contribution."""
+    def score(
+        self, features: AIFeatures, symbol: Optional[str] = None,
+        session: Optional[str] = None,
+    ) -> AIDecision:
+        """Score one candidate direction and explain every contribution.
+
+        When an AdaptiveLearner is attached, learned weight multipliers,
+        per-symbol threshold calibration and session edge are applied.
+        """
         values = features.as_dict()
+        weights = self.learner.adjusted_weights(self.weights) if self.learner else self.weights
+        threshold = self.threshold
+        if self.learner is not None:
+            threshold = clamp(threshold + self.learner.threshold_offset(symbol), 50.0, 99.0)
         contributions: dict[str, float] = {}
         reasoning: list[str] = []
         total = 0.0
-        for name, weight in self.weights.items():
+        for name, weight in weights.items():
             value = clamp(float(values.get(name, 0.0)), 0.0, 100.0)
             part = value * weight / 100.0
             contributions[name] = round(part, 2)
             total += part
             label = COMPONENT_LABELS.get(name, name)
             reasoning.append(f"{label}: {value:.0f}/100 x {weight:.1f}% = +{part:.1f}")
+        if self.learner is not None:
+            session_adj = self.learner.session_adjustment(session)
+            if session_adj:
+                total += session_adj
+                reasoning.append(f"Learned session edge ({session}): {session_adj:+.1f}")
+            if threshold != self.threshold:
+                reasoning.append(
+                    f"Learned threshold for {symbol}: {self.threshold:.0f} -> {threshold:.1f}")
         confidence = round(clamp(total, 0.0, 100.0), 2)
         if features.direction is Direction.BULLISH:
             action = SignalAction.BUY
@@ -112,14 +137,17 @@ class AIDecisionEngine:
             action = SignalAction.SELL
         else:
             action = SignalAction.HOLD
-        passed = action is not SignalAction.HOLD and confidence >= self.threshold
+        passed = action is not SignalAction.HOLD and confidence >= threshold
         verdict = "PASS" if passed else "REJECT"
         reasoning.append(
-            f"Total confidence {confidence:.1f} vs threshold {self.threshold:.0f} -> {verdict}"
+            f"Total confidence {confidence:.1f} vs threshold {threshold:.1f} -> {verdict}"
         )
-        return AIDecision(
+        decision = AIDecision(
             action=action, direction=features.direction, confidence=confidence,
             components={k: round(clamp(float(v), 0, 100), 1) for k, v in values.items()},
             contributions=contributions, reasoning=reasoning,
-            passed=passed, threshold=self.threshold,
+            passed=passed, threshold=threshold,
         )
+        if self.learner is not None and action is not SignalAction.HOLD:
+            self.learner.note_inspection(passed)
+        return decision

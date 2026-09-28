@@ -13,7 +13,7 @@ from utils.journal import TradeJournal
 def test_app_constants():
     """Product identity constants are set."""
     assert APP_NAME == "ZeroTrace FX AI"
-    assert APP_VERSION == "1.0.0"
+    assert APP_VERSION == "1.1.0"
     assert DEFAULT_SYMBOLS == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
 
 

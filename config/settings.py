@@ -40,6 +40,18 @@ class Settings(BaseSettings):
     sweep_recency_bars: int = Field(default=30, alias="SWEEP_RECENCY_BARS")
     fvg_proximity_atr: float = Field(default=1.5, alias="FVG_PROXIMITY_ATR")
 
+    # --- Remote API (Android companion app) ---
+    remote_api_enabled: bool = Field(default=False, alias="REMOTE_API_ENABLED")
+    remote_api_host: str = Field(default="0.0.0.0", alias="REMOTE_API_HOST")
+    remote_api_port: int = Field(default=8765, alias="REMOTE_API_PORT")
+    remote_api_token: str = Field(default="", alias="REMOTE_API_TOKEN")
+
+    # --- Adaptive learning ---
+    learning_enabled: bool = Field(default=True, alias="LEARNING_ENABLED")
+    learning_rate: float = Field(default=0.05, alias="LEARNING_RATE")
+    learning_memory_file: str = Field(default="ai_memory.json", alias="LEARNING_MEMORY_FILE")
+    learning_min_trades: int = Field(default=5, alias="LEARNING_MIN_TRADES")
+
     # --- Risk ---
     risk_percent: float = Field(default=1.0, alias="RISK_PERCENT")
     max_positions: int = Field(default=8, alias="MAX_POSITIONS")

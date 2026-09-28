@@ -4,7 +4,7 @@ from __future__ import annotations
 import asyncio
 from dataclasses import dataclass, field
 from datetime import datetime
-from typing import Optional
+from typing import TYPE_CHECKING, Any, Optional
 
 from config.settings import Settings
 from core.events import Event, get_event_bus
@@ -20,12 +20,15 @@ from market.filters import (
 )
 from paper.paper_broker import PaperBroker
 from risk.basket import BasketManager
-from risk.position_sizing import lots_for_risk, risk_amount_for_lots
+from risk.position_sizing import lots_for_risk
 from risk.risk_manager import RiskManager
 from strategy.strategy import Strategy
 from utils.common import from_pips, utcnow
 from utils.journal import TradeJournal
 from utils.logging_setup import get_logger, log_trade_event
+
+if TYPE_CHECKING:  # pragma: no cover
+    from strategy.learning import AdaptiveLearner
 
 logger = get_logger("app")
 trade_logger = get_logger("trades")
@@ -58,6 +61,7 @@ class LiveTrader:
         journal: TradeJournal,
         state: RuntimeState,
         calendar: EconomicCalendar,
+        learner: Optional["AdaptiveLearner"] = None,
     ) -> None:
         """Wire every engine component into the trading loop."""
         self.settings = settings
@@ -72,6 +76,11 @@ class LiveTrader:
         self._partialed: set[str] = set()
         self._initial_risk: dict[str, float] = {}
         self._equity_points = 0
+        self.learner = learner if learner is not None else getattr(strategy.ai, "learner", None)
+        # ticket -> {"booked": realised partial profit, "basket": closed by basket, "misses": n}
+        self._tracked: dict[str, dict[str, Any]] = {}
+        # Adopt positions already open at start so their outcome is still counted.
+        self._adopted = False
 
     # -- main loop ---------------------------------------------------------
     async def run_forever(self) -> None:
@@ -103,6 +112,7 @@ class LiveTrader:
             self.state.update(status_message="Waiting for broker connection")
             return result
         positions = broker.get_positions()
+        self._reconcile_closed(positions)
         self.risk.on_equity_update(account.equity, account.balance, now)
         if self.risk.kill_switch:
             self.state.update(kill_switch=True,
@@ -182,6 +192,21 @@ class LiveTrader:
                 result.orders_placed += 1
                 positions = broker.get_positions()
                 self._initial_risk[fill.ticket] = abs(signal.entry - signal.stop_loss)
+                self._tracked[str(fill.ticket)] = {
+                    "booked": 0.0, "basket": False, "misses": 0,
+                    "symbol": symbol, "action": signal.action.value,
+                    "volume": fill.volume, "entry": fill.price,
+                }
+                if self.learner is not None and spec is not None:
+                    risk_money = (
+                        abs(fill.price - signal.stop_loss) / spec.tick_size
+                        * spec.tick_value * fill.volume
+                    ) if spec.tick_size > 0 else 0.0
+                    self.learner.register_entry(
+                        str(fill.ticket), symbol, signal.action.value,
+                        signal.confidence, signal.components, risk_money,
+                        market.session,
+                    )
                 self.journal.record_fill(
                     symbol, signal.action.value, fill.ticket, fill.volume,
                     fill.price, signal.stop_loss, signal.take_profit,
@@ -231,6 +256,10 @@ class LiveTrader:
         """Close all positions immediately, journal, update stats and reset."""
         positions = self.orders.broker.get_positions()
         entries = {p.ticket: p.entry for p in positions}
+        for position in positions:
+            info = self._tracked.setdefault(
+                str(position.ticket), {"booked": 0.0, "basket": False, "misses": 0})
+            info["basket"] = True
         outcome = self.orders.close_all_verified()
         result.basket_closed = True
         result.basket_profit = outcome.total_profit
@@ -316,11 +345,63 @@ class LiveTrader:
                     if closed.success:
                         self._partialed.add(position.ticket)
                         self.risk.record_closed_profit(closed.profit)
+                        info = self._tracked.setdefault(
+                            str(position.ticket), {"booked": 0.0, "basket": False, "misses": 0})
+                        info["booked"] = float(info["booked"]) + closed.profit
                         self.journal.record_close(
                             position.symbol, position.action.value, position.ticket,
                             raw_volume, position.entry, closed.price, closed.profit,
                             reason="PARTIAL_TP",
                         )
+
+    # -- closed-trade reconciliation + learning --------------------------------
+    def _reconcile_closed(self, positions: list[Position]) -> None:
+        """Detect positions closed by SL/TP/basket and learn from each outcome.
+
+        Broker-side SL/TP hits never pass through the order manager, so without
+        this step the risk manager (daily loss, consecutive-loss lock) and the
+        AI memory would never see them.
+        """
+        open_tickets = {str(p.ticket) for p in positions}
+        if not self._adopted:
+            self._adopted = True
+            for position in positions:
+                self._tracked.setdefault(str(position.ticket), {
+                    "booked": 0.0, "basket": False, "misses": 0,
+                    "symbol": position.symbol, "action": position.action.value,
+                    "volume": position.volume, "entry": position.entry,
+                })
+        broker = self.orders.broker
+        for ticket in [t for t in self._tracked if t not in open_tickets]:
+            info = self._tracked[ticket]
+            profit = broker.closed_profit(ticket)
+            if profit is None:
+                info["misses"] = int(info["misses"]) + 1
+                if info["misses"] >= 10:  # history unavailable: stop waiting
+                    self._tracked.pop(ticket, None)
+                    self._initial_risk.pop(ticket, None)
+                    if self.learner is not None:
+                        self.learner.state.pending.pop(ticket, None)
+                continue
+            self._tracked.pop(ticket, None)
+            self._initial_risk.pop(ticket, None)
+            self._partialed.discard(ticket)
+            if not info["basket"]:
+                remaining = profit - float(info["booked"])
+                self.risk.record_closed_profit(remaining)
+                self.journal.record_close(
+                    str(info.get("symbol", "")), str(info.get("action", "")), ticket,
+                    float(info.get("volume", 0.0)), float(info.get("entry", 0.0)),
+                    0.0, remaining, reason="SL/TP",
+                )
+                self.state.push_trade({
+                    "time": utcnow().isoformat(), "symbol": info.get("symbol", ""),
+                    "action": f"{info.get('action', '')} SL/TP",
+                    "profit": round(remaining, 2), "reason": f"#{ticket} closed by broker",
+                })
+            if self.learner is not None:
+                self.learner.record_outcome(ticket, profit)
+                self.state.update(ai_trades_learned=self.learner.state.trades_learned)
 
     # -- paper pricing --------------------------------------------------------------
     async def _feed_paper_prices(self) -> None:

@@ -55,8 +55,18 @@ jobs:
       - name: Run test suite
         run: python -m pytest tests/ -q
 
-      - name: Build executable
+      - name: Build executable (folder bundle)
         run: pyinstaller --noconfirm --clean zerotrace.spec
+
+      - name: Build standalone single-file executable
+        shell: pwsh
+        run: |
+          $env:ZT_ONEFILE = "1"
+          pyinstaller --noconfirm --clean --distpath dist-onefile --workpath build-onefile zerotrace.spec
+          if (-not (Test-Path "dist-onefile\ZeroTraceFXAI.exe" -PathType Leaf)) {
+            throw "Standalone executable was not created"
+          }
+          Copy-Item "dist-onefile\ZeroTraceFXAI.exe" "ZeroTraceFXAI-$env:GITHUB_REF_NAME-windows.exe" -Force
 
       - name: Verify executable and package Windows ZIP
         shell: pwsh
@@ -90,25 +100,79 @@ jobs:
           name: ZeroTraceFXAI-${{ github.ref_name }}-release-zips
           path: |
             ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+            ZeroTraceFXAI-${{ github.ref_name }}-windows.exe
             ZeroTraceFXAI-${{ github.ref_name }}-source.zip
           if-no-files-found: error
           retention-days: 30
 
+  build-android:
+    name: Build Android companion APK
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: android-actions/setup-android@v3
+
+      - uses: gradle/actions/setup-gradle@v4
+        with:
+          gradle-version: "8.9"
+
+      - name: Build APK
+        working-directory: android
+        env:
+          ZT_VERSION_NAME: ${{ github.ref_name }}
+          ZT_VERSION_CODE: ${{ github.run_number }}
+        run: gradle --no-daemon assembleRelease
+
+      - name: Collect APK
+        run: |
+          cp android/app/build/outputs/apk/release/app-release.apk "ZeroTraceFXAI-${GITHUB_REF_NAME}-android.apk"
+          ls -la *.apk
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ZeroTraceFXAI-${{ github.ref_name }}-android
+          path: ZeroTraceFXAI-${{ github.ref_name }}-android.apk
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    needs: [build-windows, build-android]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          path: artifacts
+          merge-multiple: true
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: |
-            ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
-            ZeroTraceFXAI-${{ github.ref_name }}-source.zip
-          fail_on_unmatched_files: false
+          files: artifacts/*
+          fail_on_unmatched_files: true
           generate_release_notes: true
           body: |
             ## ZeroTrace FX AI ${{ github.ref_name }}
 
-            Fixed the Windows release workflow with a Python 3.11 build, pip caching, and resilient optional dependency installation. This release includes both the Windows desktop bundle and a source ZIP.
+            **New: adaptive learning.** The AI now learns from every trade it closes
+            (TP, SL, basket, manual and backtests with `--learn`): component weights,
+            per-symbol confidence thresholds and session edge are updated and saved to
+            `logs/ai_memory.json`. Run `ZeroTraceFXAI.exe ai` / `python main.py ai` to see it.
 
-            - `ZeroTraceFXAI-${{ github.ref_name }}-windows.zip` — Windows desktop app bundle.
-            - `ZeroTraceFXAI-${{ github.ref_name }}-source.zip` — source archive for running from source.
-            - See [`docs/MOBILE.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/MOBILE.md) for why this release does not include an APK.
+            | File | What it is |
+            |---|---|
+            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.exe` | Standalone Windows app (single file) |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.zip` | Windows app folder bundle (faster start) |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-android.apk` | Android remote monitor/control app |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-source.zip` | Source code |
+
+            The APK is a companion app: trading runs on the Windows PC with MetaTrader 5.
+            Enable `REMOTE_API_ENABLED=true` and set `REMOTE_API_TOKEN` in `.env`, then enter
+            the PC's address and token in the app. See `docs/MOBILE.md`.
 
             **Trading forex involves substantial risk of loss.**

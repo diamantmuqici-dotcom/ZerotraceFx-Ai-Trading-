@@ -86,7 +86,7 @@ class WalkForwardResult:
         lines = [
             f"W{i.index}: train {w.train_net:+.2f} -> test {w.test_net:+.2f} "
             f"params={w.best_params}"
-            for i, w in zip(range(len(self.windows)), self.windows)
+            for i, w in zip(range(len(self.windows)), self.windows, strict=False)
         ]
         lines.append(
             f"Total out-of-sample: {self.total_test_net:+.2f} "

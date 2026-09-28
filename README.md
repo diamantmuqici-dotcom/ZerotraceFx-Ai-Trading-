@@ -28,6 +28,11 @@ history) that launches directly from `ZeroTraceFXAI.exe`.
 
 ## Features
 
+- **Adaptive learning** — the AI learns from every trade it closes: component
+  weights, per-symbol confidence thresholds and session edge adapt over time
+  and persist across restarts (`python main.py ai` shows the memory).
+- **Android companion app** — monitor and control the engine from your phone
+  (see [docs/MOBILE.md](docs/MOBILE.md)).
 - **Smart Money Concepts engine** — fractal swings (internal + external), BOS /
   CHoCH, order blocks, fair value gaps, liquidity sweeps, equal highs/lows,
   supply/demand zones, premium/discount — all candle-based with mitigation and

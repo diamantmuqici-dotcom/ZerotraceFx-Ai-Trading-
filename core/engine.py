@@ -2,7 +2,6 @@
 from __future__ import annotations
 
 import os
-from typing import Optional
 
 from config.constants import DEFAULT_SPECS
 from config.settings import Settings
@@ -17,6 +16,8 @@ from market.mt5_client import MT5Client
 from paper.paper_broker import PaperBroker
 from risk.basket import BasketManager
 from risk.risk_manager import RiskManager
+from strategy.ai_engine import AIDecisionEngine
+from strategy.learning import AdaptiveLearner
 from strategy.strategy import Strategy
 from utils.journal import TradeJournal
 from utils.logging_setup import get_logger, setup_logging
@@ -45,7 +46,16 @@ class ZeroTraceEngine:
             server=settings.mt5_server, path=settings.mt5_path,
         )
         self.data = MarketDataEngine(self.mt5, candles_count=settings.candles_count)
-        self.strategy = Strategy(settings)
+        self.learner = AdaptiveLearner(
+            path=os.path.join(settings.logs_dir, settings.learning_memory_file),
+            learning_rate=settings.learning_rate,
+            min_trades_for_calibration=settings.learning_min_trades,
+            enabled=settings.learning_enabled,
+        )
+        self.strategy = Strategy(
+            settings,
+            ai=AIDecisionEngine(threshold=settings.confidence_threshold, learner=self.learner),
+        )
         self.risk = RiskManager(settings)
         self.basket = BasketManager(
             target=settings.basket_target,
@@ -73,7 +83,9 @@ class ZeroTraceEngine:
         self.trader = LiveTrader(
             settings, self.data, self.strategy, self.orders, self.risk,
             self.basket, self.journal, self.state, self.calendar,
+            learner=self.learner,
         )
+        self.state.update(ai_trades_learned=self.learner.state.trades_learned)
 
     def connect(self) -> bool:
         """Connect the venue and preload offline CSV data for paper mode."""
@@ -127,9 +139,39 @@ class ZeroTraceEngine:
             raise RuntimeError("Could not connect to the trading venue")
         await self.trader.run_forever()
 
+    def manual_close_all(self) -> dict:
+        """Operator close-all (dashboard button / remote app)."""
+        outcome = self.orders.close_all_verified()
+        self.basket.reset()
+        self.journal.record_basket("MANUAL_CLOSE", {
+            "closed": outcome.closed, "failed": outcome.failed,
+            "profit": round(outcome.total_profit, 2),
+        })
+        return {"requested": outcome.requested, "closed": outcome.closed,
+                "failed": outcome.failed, "message": outcome.message}
+
+    def start_remote_api(self) -> bool:
+        """Start the token-protected remote API if enabled in settings."""
+        if not self.settings.remote_api_enabled:
+            return False
+        try:
+            from remote.api import build_app, start_in_thread
+
+            app = build_app(
+                self.state, self.settings.remote_api_token,
+                on_close_all=self.manual_close_all,
+                ai_summary=self.learner.summary,
+            )
+            start_in_thread(app, self.settings.remote_api_host, self.settings.remote_api_port)
+            return True
+        except Exception as exc:  # noqa: BLE001 - never block trading
+            logger.error("Remote API not started: %s", exc)
+            return False
+
     def shutdown(self) -> None:
         """Stop the loop and release venue resources."""
         self.state.update(running=False)
+        self.learner.save()
         try:
             self.broker.shutdown()
         except Exception:  # noqa: BLE001
