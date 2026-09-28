@@ -2,54 +2,113 @@ name: Release
 
 on:
   push:
-    tags: ["v*"]
+    tags:
+      - "v*"
 
 permissions:
   contents: write
 
 jobs:
   build-windows:
-    name: Build ZeroTraceFXAI.exe
+    name: Build ZeroTraceFXAI.exe and source archive
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
       - uses: actions/setup-python@v5
         with:
           python-version: "3.11"
-      - name: Install dependencies
-        shell: pwsh
+          cache: pip
+          cache-dependency-path: requirements.txt
+
+      - name: Install core dependencies and PyInstaller
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
-          pip install pyinstaller
-          pip install PySide6 --only-binary=:all: 2>&1 | Out-String
-          pip install MetaTrader5 --only-binary=:all: 2>&1 | Out-String
-          Write-Host "Deps installed (MT5 optional)"
-      - name: Run test-suite
-        run: python -m pytest tests/ -q
-      - name: Build executable
-        run: pyinstaller --noconfirm zerotrace.spec
-      - name: Package artefact
+          python -m pip install -r requirements.txt
+          python -m pip install pyinstaller
+
+      - name: Install optional Windows extras
         shell: pwsh
         run: |
-          Compress-Archive -Path dist\ZeroTraceFXAI\* -DestinationPath ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
-          Copy-Item .env.example dist\.env.example
-      - name: Upload artefact
+          function Install-OptionalPackage {
+            param([Parameter(Mandatory = $true)][string]$Package)
+
+            try {
+              Write-Host "Attempting optional install: $Package"
+              python -m pip install $Package --only-binary=:all:
+              if ($LASTEXITCODE -ne 0) {
+                throw "pip returned exit code $LASTEXITCODE for $Package"
+              }
+              Write-Host "$Package installed successfully."
+            }
+            catch {
+              Write-Warning "Could not install optional package $Package; continuing: $_"
+              $global:LASTEXITCODE = 0
+            }
+          }
+
+          Install-OptionalPackage -Package "PySide6"
+          Install-OptionalPackage -Package "MetaTrader5"
+
+      - name: Run test suite
+        run: python -m pytest tests/ -q
+
+      - name: Build executable
+        run: pyinstaller --noconfirm --clean zerotrace.spec
+
+      - name: Verify executable and package Windows ZIP
+        shell: pwsh
+        run: |
+          $exePath = "dist\ZeroTraceFXAI\ZeroTraceFXAI.exe"
+          if (-not (Test-Path $exePath -PathType Leaf)) {
+            throw "Expected executable was not created: $exePath"
+          }
+
+          Copy-Item .env.example "dist\ZeroTraceFXAI\.env.example" -Force
+          $windowsZip = "ZeroTraceFXAI-$env:GITHUB_REF_NAME-windows.zip"
+          if (Test-Path $windowsZip) {
+            Remove-Item $windowsZip -Force
+          }
+          Compress-Archive -Path "dist\ZeroTraceFXAI" -DestinationPath $windowsZip -CompressionLevel Optimal
+          Write-Host "Created $windowsZip"
+
+      - name: Package source ZIP
+        shell: pwsh
+        run: |
+          $sourceZip = "ZeroTraceFXAI-$env:GITHUB_REF_NAME-source.zip"
+          git archive --format=zip --prefix=ZeroTraceFXAI/ --output=$sourceZip HEAD
+          if ($LASTEXITCODE -ne 0 -or -not (Test-Path $sourceZip -PathType Leaf)) {
+            throw "Failed to create source archive: $sourceZip"
+          }
+          Write-Host "Created $sourceZip"
+
+      - name: Upload release ZIPs as workflow artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: ZeroTraceFXAI-windows
-          path: ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+          name: ZeroTraceFXAI-${{ github.ref_name }}-release-zips
+          path: |
+            ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+            ZeroTraceFXAI-${{ github.ref_name }}-source.zip
+          if-no-files-found: error
           retention-days: 30
+
       - name: Create GitHub release
         uses: softprops/action-gh-release@v2
         with:
-          files: ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+          files: |
+            ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
+            ZeroTraceFXAI-${{ github.ref_name }}-source.zip
+          fail_on_unmatched_files: false
           generate_release_notes: true
           body: |
             ## ZeroTrace FX AI ${{ github.ref_name }}
-            Institutional Smart Money Autonomous Forex Trading Platform.
-            See CHANGELOG.md for details. **Trading forex involves substantial risk of loss.**
 
-            ### Downloads
-            - `ZeroTraceFXAI-*-windows.zip` — Windows desktop app (includes .exe, runs without Python)
-            - Source code (zip/tar.gz) — run from source via `python main.py dashboard`
+            Fixed the Windows release workflow with a Python 3.11 build, pip caching, and resilient optional dependency installation. This release includes both the Windows desktop bundle and a source ZIP.
+
+            - `ZeroTraceFXAI-${{ github.ref_name }}-windows.zip` — Windows desktop app bundle.
+            - `ZeroTraceFXAI-${{ github.ref_name }}-source.zip` — source archive for running from source.
+            - See [`docs/MOBILE.md`](https://github.com/${{ github.repository }}/blob/${{ github.ref_name }}/docs/MOBILE.md) for why this release does not include an APK.
+
+            **Trading forex involves substantial risk of loss.**

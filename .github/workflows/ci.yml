@@ -22,18 +22,29 @@ jobs:
       - name: Install core dependencies
         run: |
           python -m pip install --upgrade pip
-          pip install -r requirements.txt
+          python -m pip install -r requirements.txt
       - name: Install Windows extras (optional, best-effort)
         if: runner.os == 'Windows'
         shell: pwsh
-        run: |
-          pip install PySide6 --only-binary=:all: 2>&1 | Out-String
-          pip install MetaTrader5 --only-binary=:all: 2>&1 | Out-String
-          Write-Host "Windows extras install attempted (MT5 may be unavailable on 3.13 - expected)"
         continue-on-error: true
+        run: |
+          foreach ($package in @("PySide6", "MetaTrader5")) {
+            try {
+              Write-Host "Attempting optional install: $package"
+              python -m pip install $package --only-binary=:all:
+              if ($LASTEXITCODE -ne 0) {
+                throw "pip returned exit code $LASTEXITCODE for $package"
+              }
+              Write-Host "$package installed successfully."
+            }
+            catch {
+              Write-Warning "Could not install optional package $package; continuing: $_"
+              $global:LASTEXITCODE = 0
+            }
+          }
       - name: Byte-compile everything
         run: python -m compileall -q main.py core config market smart_money strategy execution risk paper live backtest dashboard utils tests
-      - name: Run test-suite
+      - name: Run test suite
         run: python -m pytest tests/ -q
       - name: CLI smoke test
         run: python main.py version

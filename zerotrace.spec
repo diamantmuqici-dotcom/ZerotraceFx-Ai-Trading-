@@ -3,7 +3,14 @@
 import os
 
 block_cipher = None
-ROOT = os.path.abspath(SPECCWD)
+
+# SPECCWD is injected by some PyInstaller versions. Fall back to the spec
+# file's directory so the spec also works when that variable is unavailable.
+try:
+    ROOT = os.path.abspath(SPECCWD)
+except NameError:
+    ROOT = os.path.dirname(os.path.abspath(__file__))
+
 ICON = os.path.join(ROOT, "assets", "app.ico")
 
 datas = [
