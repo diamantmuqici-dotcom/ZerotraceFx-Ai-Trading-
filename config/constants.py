@@ -2,7 +2,7 @@
 from __future__ import annotations
 
 APP_NAME = "ZeroTrace FX AI"
-APP_VERSION = "1.2.0"
+APP_VERSION = "1.2.2"
 APP_TAGLINE = "Institutional Smart Money Autonomous Forex Trading Platform"
 MAGIC_DEFAULT = 240901
 

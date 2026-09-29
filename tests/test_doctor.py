@@ -26,6 +26,7 @@ def test_doctor_collects_mode_and_per_symbol_checks(settings):
     areas = [check.area for check in checks]
     assert "mode" in areas
     assert "mt5" in areas
+    assert "config" in areas
     for symbol in settings.symbol_list:
         assert symbol in areas
     assert all(check.status in MARKS for check in checks)

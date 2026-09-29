@@ -4,6 +4,33 @@ All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).
 
+## [1.2.2] - 2026-09-29
+
+### Fixed
+- **"ACCOUNT_MODE=PAPER" with no explanation**: the app now finds its `.env`
+  in the current directory *or* the application directory (exe folder when
+  frozen), and `doctor` gained a first `config` line that says exactly where
+  the config was loaded from — or why it wasn't:
+  - `.env.txt` present but no `.env` → flags the classic Windows Notepad
+    "Save as type: All Files" gotcha and tells you to rename it;
+  - no `.env` at all → says the app is silently running on built-in
+    PAPER defaults and to copy `.env.example` to `.env` and set
+    `ACCOUNT_MODE=LIVE`.
+  Previously both situations produced only the confusing `[FAIL] mode`
+  line while the real problem (file never read) was invisible.
+
+## [1.2.1] - 2026-09-28
+
+### Fixed
+- **Paper mode ignored the bundled sample data**: `ZeroTraceEngine._preload_csv_feeds()`
+  only looked for `data/{SYMBOL}_{TF}.csv`, so the committed
+  `data/sample_*.csv` feeds were never loaded and every symbol reported
+  "no M5 bars". It now falls back to the `sample_{SYMBOL}_{TF}.csv` naming,
+  so a fresh checkout has working paper pricing out of the box.
+- `test_settings_defaults` no longer breaks when a developer has a local
+  `.env` (e.g. `ACCOUNT_MODE=LIVE`) in the repo root: defaults are now
+  asserted with `Settings(_env_file=None)`.
+
 ## [1.2.0] - 2026-09-28
 
 ### Fixed
