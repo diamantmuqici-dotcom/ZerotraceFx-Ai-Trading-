@@ -1,0 +1,12 @@
+name: Windows Build
+on: [push, pull_request]
+jobs:
+  build:
+    runs-on: windows-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.13'
+      - name: Placeholder
+        run: echo ZeroTraceFX Windows build scaffold
