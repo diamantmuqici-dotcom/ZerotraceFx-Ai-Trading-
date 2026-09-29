@@ -22,7 +22,7 @@ def test_journal_read_closes_round_trip(tmp_path):
 
 
 def test_engine_seeds_history_from_journal(settings):
-    engine = ZeroTraceEngine(settings)
+    engine = ZeroTraceEngine(settings, allow_research=True)
     engine.journal.record_close("GBPUSD", "BUY", "1", 0.2, 1.26, 1.27, 55.0,
                                 reason="TP")
     engine.journal.record_close("EURUSD", "SELL", "2", 0.2, 1.09, 1.095, -18.0,
@@ -38,7 +38,7 @@ def test_engine_seeds_history_from_journal(settings):
 
 
 def test_manual_close_all_reaches_history_once(settings):
-    engine = ZeroTraceEngine(settings)
+    engine = ZeroTraceEngine(settings, allow_research=True)
     before = len(engine.state.snapshot()["recent_trades"])
     result = engine.manual_close_all()
     after = engine.state.snapshot()["recent_trades"]

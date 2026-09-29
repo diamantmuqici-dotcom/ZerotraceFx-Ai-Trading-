@@ -17,7 +17,7 @@ def test_bar_age_handles_naive_and_aware_timestamps():
 
 
 def test_doctor_collects_mode_and_per_symbol_checks(settings):
-    engine = ZeroTraceEngine(settings)
+    engine = ZeroTraceEngine(settings, allow_research=True)
     engine.connect()
     try:
         checks = asyncio.run(collect(engine))

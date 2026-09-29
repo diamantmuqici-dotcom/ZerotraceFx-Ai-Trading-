@@ -17,7 +17,7 @@ from utils.common import utcnow
 
 OK, WARN, FAIL = "OK", "WARN", "FAIL"
 MARKS = {OK: "[ ok ]", WARN: "[warn]", FAIL: "[FAIL]"}
-TRADE_MODES = {0: "REAL money", 1: "contest", 2: "DEMO money"}
+REAL_TRADE_MODE = 0
 
 
 @dataclass
@@ -48,11 +48,13 @@ async def collect(engine: Any) -> list[Check]:
                             "ACCOUNT_MODE=LIVE - orders route to the MetaTrader 5 terminal"))
     else:
         checks.append(Check("mode", FAIL,
-                            f"ACCOUNT_MODE={settings.mode} - fills come from the internal "
-                            "simulator; MT5 is never sent orders. Set ACCOUNT_MODE=LIVE in "
-                            ".env to trade your MT5 account (demo or real)."))
+                            f"ACCOUNT_MODE={settings.mode} is not permitted. "
+                            "Set ACCOUNT_MODE=LIVE for authenticated real MT5 execution."))
     if settings.mode == "LIVE":
-        if not engine.mt5.available:
+        venue = engine.session_detector.snapshot() if hasattr(engine, "session_detector") else None
+        if venue is not None and venue.status.value == "web_detected":
+            checks.append(Check("mt5", WARN, venue.message))
+        elif not engine.mt5.available:
             checks.append(Check("mt5", FAIL,
                                 "MetaTrader5 python package not importable "
                                 "(needs Windows + `pip install MetaTrader5`)"))
@@ -61,28 +63,32 @@ async def collect(engine: Any) -> list[Check]:
             if info is not None:
                 checks.append(Check("mt5", WARN,
                                     f"terminal running (build {getattr(info, 'build', '?')}) "
-                                    "but session not initialised - check MT5_LOGIN/MT5_SERVER"))
+                                    "but no authenticated account is available - "
+                                    "finish login in MT5 Desktop"))
             elif engine.mt5.terminal_process_running():
                 checks.append(Check("mt5", WARN,
-                                    "terminal64.exe process is running but initialize() "
-                                    "failed - restart MT5 or set MT5_PATH to terminal64.exe"))
+                                    "terminal64.exe is running but the official API is not "
+                                    "attached to an authenticated session"))
             else:
                 checks.append(Check("mt5", FAIL,
-                                    "MetaTrader 5 terminal is NOT running - start it (or set "
-                                    "MT5_PATH so initialize() can launch it), then retry"))
+                                    "MetaTrader 5 terminal is NOT running - start an "
+                                    "already authenticated MT5 Desktop session, then retry"))
         else:
             raw = engine.mt5.raw_account_info()
-            kind = TRADE_MODES.get(int(getattr(raw, "trade_mode", -1)), "unknown type")
+            mode = int(getattr(raw, "trade_mode", -1)) if raw is not None else -1
             info = engine.mt5.terminal_info()
             build = getattr(info, "build", "?") if info is not None else "?"
-            checks.append(Check("mt5", OK,
-                                f"terminal running (build {build}) - login "
-                                f"{getattr(raw, 'login', '?')} @ "
-                                f"{getattr(raw, 'server', '?')} ({kind})"))
-    else:
-        checks.append(Check("mt5", WARN if engine.mt5.is_connected() else OK,
-                            "prices: " + ("live MT5 ticks" if engine.mt5.is_connected()
-                                          else "offline CSV feeds in data/")))
+            if mode == REAL_TRADE_MODE:
+                checks.append(Check("mt5", OK,
+                                    f"authenticated real terminal connected (build {build})"))
+            else:
+                checks.append(Check("mt5", FAIL,
+                                    "an authenticated MT5 session is present but is not "
+                                    "a real-money account; trading is disabled"))
+
+    elif settings.mode != "LIVE":
+        checks.append(Check("mt5", OK,
+                            "MT5 venue checks are deferred until production LIVE mode"))
 
     # --- risk locks (global) ---------------------------------------------
     if engine.state.kill_switch or engine.risk.kill_switch:

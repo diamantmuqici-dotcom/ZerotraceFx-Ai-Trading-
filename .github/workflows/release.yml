@@ -19,7 +19,7 @@ jobs:
 
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.11"
+          python-version: "3.13"
           cache: pip
           cache-dependency-path: requirements.txt
 
@@ -56,7 +56,7 @@ jobs:
         run: python -m pytest tests/ -q
 
       - name: Build executable (folder bundle)
-        run: pyinstaller --noconfirm --clean zerotrace.spec
+        run: pyinstaller --noconfirm --clean --distpath python-dist --workpath python-build zerotrace.spec
 
       - name: Build standalone single-file executable
         shell: pwsh
@@ -68,20 +68,35 @@ jobs:
           }
           Copy-Item "dist-onefile\ZeroTraceFXAI.exe" "ZeroTraceFXAI-$env:GITHUB_REF_NAME-windows.exe" -Force
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+          cache: npm
+
+      - name: Build Electron installer and portable executable
+        shell: pwsh
+        run: |
+          npm install
+          if (Test-Path "release-python") { Remove-Item "release-python" -Recurse -Force }
+          New-Item -ItemType Directory -Path "release-python" | Out-Null
+          Copy-Item "python-dist\ZeroTraceFXAI" "release-python\ZeroTraceFXAI" -Recurse -Force
+          npm run package:windows
+          Get-ChildItem "dist\ZeroTrace FX AI*" | ForEach-Object { Write-Host $_.FullName }
+
       - name: Verify executable and package Windows ZIP
         shell: pwsh
         run: |
-          $exePath = "dist\ZeroTraceFXAI\ZeroTraceFXAI.exe"
+          $exePath = "python-dist\ZeroTraceFXAI\ZeroTraceFXAI.exe"
           if (-not (Test-Path $exePath -PathType Leaf)) {
             throw "Expected executable was not created: $exePath"
           }
 
-          Copy-Item .env.example "dist\ZeroTraceFXAI\.env.example" -Force
+          Copy-Item .env.example "python-dist\ZeroTraceFXAI\.env.example" -Force
           $windowsZip = "ZeroTraceFXAI-$env:GITHUB_REF_NAME-windows.zip"
           if (Test-Path $windowsZip) {
             Remove-Item $windowsZip -Force
           }
-          Compress-Archive -Path "dist\ZeroTraceFXAI" -DestinationPath $windowsZip -CompressionLevel Optimal
+          Compress-Archive -Path "python-dist\ZeroTraceFXAI" -DestinationPath $windowsZip -CompressionLevel Optimal
           Write-Host "Created $windowsZip"
 
       - name: Package source ZIP
@@ -102,6 +117,8 @@ jobs:
             ZeroTraceFXAI-${{ github.ref_name }}-windows.zip
             ZeroTraceFXAI-${{ github.ref_name }}-windows.exe
             ZeroTraceFXAI-${{ github.ref_name }}-source.zip
+            dist/ZeroTrace FX AI*.exe
+            dist/ZeroTrace FX AI*.nsis.7z
           if-no-files-found: error
           retention-days: 30
 
@@ -170,20 +187,19 @@ jobs:
           body: |
             ## ZeroTrace FX AI ${{ github.ref_name }}
 
-            **New: adaptive learning.** The AI now learns from every trade it closes
-            (TP, SL, basket, manual and backtests with `--learn`): component weights,
-            per-symbol confidence thresholds and session edge are updated and saved to
-            `logs/ai_memory.json`. Run `ZeroTraceFXAI.exe ai` / `python main.py ai` to see it.
+            ZeroTrace FX AI 2.0.0 is a real-mode-only terminal. It attaches to an
+            already authenticated MetaTrader 5 Desktop session through the official
+            API and never stores or requests an MT5 password.
 
             | File | What it is |
             |---|---|
-            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.exe` | Standalone Windows app (single file) |
-            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.zip` | Windows app folder bundle (faster start) |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.exe` | Standalone Windows Python terminal |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-windows.zip` | Windows app folder bundle |
             | `ZeroTraceFXAI-${{ github.ref_name }}-android.apk` | Android remote monitor/control app |
-            | `ZeroTraceFXAI-${{ github.ref_name }}-source.zip` | Source code |
+            | `ZeroTraceFXAI-${{ github.ref_name }}-source.zip` | Source code and Electron workstation |
 
-            The APK is a companion app: trading runs on the Windows PC with MetaTrader 5.
-            Enable `REMOTE_API_ENABLED=true` and set `REMOTE_API_TOKEN` in `.env`, then enter
-            the PC's address and token in the app. See `docs/MOBILE.md`.
+            The APK and Electron shell control the Python engine; neither performs
+            MT5 authentication. Enable `REMOTE_API_ENABLED=true` only on a trusted
+            LAN/VPN and set a random `REMOTE_API_TOKEN`. See `docs/MOBILE.md`.
 
             **Trading forex involves substantial risk of loss.**

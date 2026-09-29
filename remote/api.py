@@ -64,7 +64,10 @@ def build_app(
         result = await asyncio.get_running_loop().run_in_executor(None, on_close_all)
         return web.json_response(result)
 
-    app = web.Application(middlewares=[auth])
+    # Keep the control plane deliberately small: status and bounded JSON
+    # commands only. This also prevents accidental memory pressure from a
+    # malformed mobile request.
+    app = web.Application(middlewares=[auth], client_max_size=64 * 1024)
     app.router.add_get("/api/status", status)
     app.router.add_get("/api/ai", ai)
     app.router.add_post("/api/pause", pause)

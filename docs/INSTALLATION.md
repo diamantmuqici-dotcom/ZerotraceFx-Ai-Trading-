@@ -1,64 +1,58 @@
-# Installation Guide — ZeroTrace FX AI v1.0.0
+# Installation — Windows 10/11
 
-## Option A: Windows executable (recommended for live trading)
+## 1. Prepare MetaTrader 5
 
-1. Download `ZeroTraceFXAI-v1.0.0-windows.zip` from the GitHub Releases page.
-2. Extract it to a folder, e.g. `C:\ZeroTraceFXAI\`.
-3. Copy `.env.example` to `.env` and edit your settings (see `docs/CONFIGURATION.md`).
-4. Make sure MetaTrader 5 is installed and you are logged in (for LIVE; PAPER works standalone).
-5. Double-click `ZeroTraceFXAI.exe` — the dashboard opens and the engine starts.
+1. Install MT5 Desktop from the broker or MetaQuotes.
+2. Sign in to the intended **real-money** account inside MT5 yourself.
+3. Confirm the broker permits algorithmic trading.
+4. Leave the authenticated terminal running.
 
-> The `.exe` is built from this exact source by the `Release` GitHub Actions workflow
-> (`pyinstaller zerotrace.spec`, Python 3.13, Windows).
+ZeroTrace does not request or store MT5 passwords and does not perform an
+automatic login.
 
-## Option B: Run from source (Windows 10/11, Python 3.13)
+## 2. Install the Python engine
 
 ```powershell
-# 1. Clone
-git clone https://github.com/<you>/zerotrace-fx-ai.git
-cd zerotrace-fx-ai
-
-# 2. Virtual environment
 py -3.13 -m venv .venv
 .\.venv\Scripts\Activate.ps1
-
-# 3. Dependencies (MetaTrader5 + PySide6 install automatically on Windows)
-pip install -r requirements.txt
-
-# 4. Configure
+python -m pip install -r requirements.txt
 copy .env.example .env
-notepad .env
-
-# 5a. Launch the dashboard
-python main.py dashboard
-
-# 5b. Or run headless (PAPER/LIVE per .env)
-python main.py trade
-
-# 5c. Or run a backtest from CSV
-python main.py backtest --symbol EURUSD --csv data/sample_EURUSD_M5.csv
 ```
 
-## MetaTrader 5 setup (LIVE mode only)
+Review risk settings and keep `ACCOUNT_MODE=LIVE` and `REAL_ONLY=true`.
 
-1. In MT5: **Tools → Options → Expert Advisors** → enable *Allow Algo Trading*.
-2. Add your account credentials to `.env` (`MT5_LOGIN`, `MT5_PASSWORD`, `MT5_SERVER`).
-3. Set `ACCOUNT_MODE=LIVE`.
-4. Start with a **demo account** first. Verify fills, SL/TP and basket closes in PAPER mode before going live.
-
-## Verifying your install
+## 3. Start
 
 ```powershell
-python -m pytest tests/ -q   # full suite, ~100 tests, must be all green
-python main.py version
+python main.py doctor
+python main.py dashboard
+# or
+python main.py trade
 ```
 
-## Troubleshooting
+If MT5 is not attached to an authenticated real account, the dashboard stays
+safe and shows: `Waiting for authenticated MT5 session...`.
 
-| Symptom | Fix |
-|---|---|
-| `MetaTrader5 package unavailable` | Normal on Linux/macOS; install on Windows or use PAPER/BACKTEST |
-| Dashboard will not start | `pip install PySide6 matplotlib` (Windows) |
-| `No price yet for symbol` in paper | Connect MT5 or add `data/{SYMBOL}_{TF}.csv` feeds |
-| Kill switch latched | Review the reason in the dashboard, then *Reset Kill Switch* |
-| `ModuleNotFoundError` | Run from the repo root so `main.py` sets `sys.path` |
+## 4. Electron workstation
+
+Install Node.js 20+ and run:
+
+```powershell
+npm install
+npm start
+```
+
+The Electron main process starts the Python API as a child process, keeps the
+bearer token in memory, and exposes only a narrow context-isolated bridge to the
+renderer.
+
+## 5. Verification
+
+```powershell
+python -m compileall -q main.py core config market smart_money strategy execution risk live remote mt5 database
+python -m pytest tests/ -q
+npm run lint
+```
+
+The deterministic tests include strategy mathematics and broker-adapter
+regressions. They are not available as production UI modes.

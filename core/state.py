@@ -16,7 +16,7 @@ class RuntimeState:
     running: bool = False
     ai_trades_learned: int = 0
     paused: bool = False
-    mode: str = AccountMode.PAPER.value
+    mode: str = AccountMode.LIVE.value
     balance: float = 0.0
     equity: float = 0.0
     free_margin: float = 0.0

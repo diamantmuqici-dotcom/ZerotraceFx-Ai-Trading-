@@ -1,52 +1,46 @@
-# Architecture — ZeroTrace FX AI
+# Architecture — ZeroTrace FX AI 2.0.0
 
-Async, modular, strictly-typed Python. Each package owns one concern and talks
-to the others through `core/types.py` (shared domain models) and `core/events.py`.
+## Production boundary
 
-```mermaid
-flowchart TD
-    MT5[MetaTrader 5 terminal] <--> MDC[market/mt5_client]
-    MDC --> DE[market/data_engine]
-    CSV[data/*.csv offline feeds] --> DE
-    DE --> SMC[smart_money/smc_engine]
-    SMC --> STR[strategy: confluence + entry rules + AI engine]
-    STR --> LT[live/live_trader loop]
-    CAL[market/filters: sessions + news] --> LT
-    RISK[risk: sizing + limits + basket] <--> LT
-    LT --> OM[execution/order_manager]
-    OM --> LIVE[execution/mt5_executor]
-    OM --> PAPER[paper/paper_broker]
-    LT --> ST[(core/state)]
-    ST --> DASH[dashboard/app PySide6]
-    STR --> BT[backtest/engine + metrics + validation]
-    J[utils/journal + rotating logs] -.-> LT
+The only released execution path is:
+
+```text
+Electron / PySide dashboard → RuntimeState → LiveTrader
+      → OrderManager → MT5Executor → official MetaTrader5 API
 ```
 
-## Package responsibilities
+`MT5Client` calls `initialize` only. It does not accept or store a login,
+server or password and never calls `mt5.login`. The operator authenticates MT5
+Desktop separately. The engine validates `account.trade_mode == REAL` before
+allowing a connection.
 
-| Package | Owns |
-|---|---|
-| `core` | Domain types, event bus, runtime state, engine composition root |
-| `config` | `.env` settings (pydantic-settings), constants, offline specs |
-| `market` | MT5 client, async data engine, indicators, sessions, news filter |
-| `smart_money` | Swings, BOS/CHoCH, order blocks, FVGs, sweeps, zones, dealing range |
-| `strategy` | MTF confluence, AI 0–100 scorer, entry checklists, SL/TP math |
-| `execution` | Broker interface, live MT5 executor, retry/verify order manager |
-| `risk` | Dynamic sizing, account limits/kill switch, basket target + trailing |
-| `paper` | Simulated broker (spreads, commission, slippage, SL/TP) |
-| `live` | Realtime loop: signals → risk → fills → exits → basket |
-| `backtest` | Event-driven simulator, metrics, Monte Carlo, walk-forward, charts |
-| `dashboard` | PySide6 dark UI + view-model (Windows runtime) |
-| `utils` | Rotating logs, math/time helpers, JSONL+CSV trade journal |
+When no authenticated real session is available, the engine remains safe and
+reports **Waiting for authenticated MT5 session...**. Browser process detection
+is informational only because MT5 Web has no supported Python order API.
 
-## Key design decisions
+## Components
 
-- **One strategy core, three venues.** `Strategy.analyze_data()` is synchronous
-  and venue-free; live, paper and backtest all call it, so tested behaviour is
-  traded behaviour.
-- **Graceful degradation.** Missing MT5, thin history (macro-TF fallback),
-  wide spreads and news blackouts degrade to HOLD/skip — never to guesses.
-- **Basket-first loop.** Every cycle checks the basket target *before* new
-  signals, so a hit target closes everything instantly.
-- **Everything audited.** Signals, fills, closes, basket events and AI
-  component scores land in the journal and rotating logs.
+- `core/` — composition root, immutable-safe runtime state, event bus,
+  diagnostics and non-invasive process discovery.
+- `market/` — closed-bar MT5 data, ticks, indicators, sessions and news gates.
+- `smart_money/` — swings, structure, liquidity, order blocks, FVGs and zones.
+- `strategy/` — MTF confluence, explainable scoring and signal construction.
+- `risk/` — sizing, exposure, daily/weekly/drawdown and basket controls.
+- `execution/` — official MT5 order adapter with spread checks, retries and
+  verification.
+- `live/` — real-time cycle, broker-side close reconciliation and journal.
+- `database/` — WAL SQLite store for shared local settings, audit events,
+  watchlists, themes and backup.
+- `remote/` — bearer-token API used by the Android companion and Electron main
+  process. It never accepts MT5 credentials.
+- `electron/`, `ui/`, `css/`, `js/` — sandboxed workstation shell and
+  responsive CSS-variable terminal.
+- `android/` — remote monitor/control companion; the Python engine stays on
+  the authenticated Windows host.
+
+## Data integrity
+
+Only completed MT5 candles are passed into the strategy. The forming candle is
+removed in `MT5Client.copy_rates`, preventing a live decision from using data
+that can still change. Position outcomes are reconciled from broker history so
+SL/TP closes reach risk counters, learning memory and the persistent journal.

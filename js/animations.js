@@ -1,0 +1,1 @@
+export function enableMotion(){if(window.matchMedia("(prefers-reduced-motion: reduce)").matches)document.documentElement.classList.add("reduced-motion");document.addEventListener("click",event=>{const button=event.target.closest("button");if(!button)return;button.classList.remove("click-pop");requestAnimationFrame(()=>button.classList.add("click-pop"))})}

@@ -1,9 +1,9 @@
-"""MetaTrader 5 terminal wrapper with graceful degradation outside Windows.
+"""Official MetaTrader 5 desktop API wrapper.
 
-On machines without the MetaTrader5 package (Linux CI, dev boxes) every method
-returns a safe empty value instead of raising, so paper trading, backtesting
-and the test-suite keep working. Live trading requires a real connection.
-"""
+The client attaches only to an already authenticated terminal. It never
+accepts, stores, or submits passwords and it never calls ``mt5.login``.
+Outside Windows, safe empty values are returned so diagnostics and the UI can
+show the authenticated-session wait state without placing orders."""
 from __future__ import annotations
 
 import time
@@ -46,18 +46,8 @@ def mt5_timeframe(timeframe: str) -> Any:
 class MT5Client:
     """Thin resilient wrapper around the MetaTrader5 Python API."""
 
-    def __init__(
-        self,
-        login: int = 0,
-        password: str = "",
-        server: str = "",
-        path: str = "",
-        timeout_ms: int = 60_000,
-    ) -> None:
-        """Store credentials; no connection is made until connect() is called."""
-        self.login = login
-        self.password = password
-        self.server = server
+    def __init__(self, path: str = "", timeout_ms: int = 60_000) -> None:
+        """Configure an optional terminal path without storing credentials."""
         self.path = path
         self.timeout_ms = timeout_ms
         self._connected = False
@@ -69,27 +59,34 @@ class MT5Client:
         return HAS_MT5
 
     def connect(self) -> bool:
-        """Initialise the terminal and log in; returns True on success."""
+        """Attach to the already authenticated terminal; never auto-login."""
         if not HAS_MT5 or mt5 is None:
-            logger.warning("MetaTrader5 package unavailable - running without live MT5")
+            logger.info("MetaTrader5 API unavailable; waiting for authenticated session")
             return False
         try:
             kwargs: dict[str, Any] = {"timeout": self.timeout_ms}
             if self.path:
                 kwargs["path"] = self.path
             if not mt5.initialize(**kwargs):
-                logger.error("mt5.initialize failed: %s", mt5.last_error())
+                logger.info("MT5 terminal is not ready: %s", mt5.last_error())
                 return False
-            if self.login and self.server:
-                if not mt5.login(self.login, password=self.password, server=self.server):
-                    logger.error("mt5.login failed: %s", mt5.last_error())
-                    mt5.shutdown()
-                    return False
+            account = mt5.account_info()
+            if account is None:
+                logger.info("MT5 terminal attached without an authenticated account")
+                mt5.shutdown()
+                return False
+            # TRADE_MODE_REAL is 0 in the official API. Never trade demo or
+            # contest accounts even when the terminal is otherwise connected.
+            if int(getattr(account, "trade_mode", -1)) != 0:
+                logger.error("Refusing non-real MT5 account")
+                mt5.shutdown()
+                return False
             self._connected = True
-            logger.info("Connected to MetaTrader 5")
+            logger.info("Connected to authenticated real MetaTrader 5 session")
             return True
         except Exception as exc:  # noqa: BLE001 - terminal errors must not crash
             logger.error("MT5 connect error: %s", exc)
+            self._connected = False
             return False
 
     def reconnect(self, attempts: int = 3, delay_sec: float = 2.0) -> bool:
@@ -169,10 +166,7 @@ class MT5Client:
             return False
 
     def raw_account_info(self) -> Optional[Any]:
-        """Full MT5 account struct (adds ``trade_mode``: 0 real, 1 contest, 2 demo).
-
-        Used by ``python main.py doctor`` to tell demo money from real money.
-        """
+        """Full MT5 account struct, available only after official attach."""
         if not self.is_connected() or mt5 is None:
             return None
         try:
@@ -199,7 +193,8 @@ class MT5Client:
                 "volume_step": float(info.volume_step),
                 "spread_points": float(info.spread),
                 "currency_profit": str(info.currency_profit or "USD"),
-                "trade_allowed": bool(info.trade_mode in (0, 4)),
+                # SYMBOL_TRADE_MODE_FULL is 4; 0 means disabled.
+                "trade_allowed": bool(info.trade_mode == 4),
             }
         except Exception as exc:  # noqa: BLE001
             logger.error("symbol_spec error for %s: %s", symbol, exc)
@@ -236,7 +231,11 @@ class MT5Client:
                 return pd.DataFrame(columns=columns)
             frame = pd.DataFrame(rates)
             frame["time"] = pd.to_datetime(frame["time"], unit="s", utc=True)
-            return frame[columns]
+            # copy_rates_from_pos includes the currently forming candle. A
+            # live signal must only consume closed bars to avoid look-ahead.
+            if len(frame) > 1:
+                frame = frame.iloc[:-1]
+            return frame[columns].reset_index(drop=True)
         except Exception as exc:  # noqa: BLE001
             logger.error("copy_rates error %s %s: %s", symbol, timeframe, exc)
             return pd.DataFrame(columns=columns)

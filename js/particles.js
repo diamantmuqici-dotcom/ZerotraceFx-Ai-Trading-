@@ -1,0 +1,1 @@
+export function seedParticles(count=28){const root=document.querySelector("[data-particles]");if(!root)return;for(let index=0;index<count;index+=1){const particle=document.createElement("i");particle.className="particle";particle.dataset.particleIndex=String(index);root.append(particle)}}

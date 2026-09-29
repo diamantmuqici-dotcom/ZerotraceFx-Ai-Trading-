@@ -1,5 +1,25 @@
 # Changelog — ZeroTrace FX AI
 
+## [2.0.0] - 2026-09-29
+
+### Security and runtime policy
+- Production entry points are real-mode only and ignore legacy simulator modes.
+- MT5 credentials were removed from settings and the client no longer calls `mt5.login`.
+- The official API now attaches only to an already authenticated real MT5 Desktop account.
+- Added non-invasive desktop/browser session discovery with the exact waiting state: `Waiting for authenticated MT5 session...`.
+- Live market data excludes the currently forming candle to prevent look-ahead decisions.
+
+### Added
+- Electron 32 shell with context isolation, sandboxed preload, CSP and a token-protected Python bridge.
+- Responsive glass terminal UI with ten selectable themes, live account KPIs, equity chart, risk, AI reasoning, journal and close-all control.
+- Standalone UI page surfaces for dashboard, chart, trades, journal, settings, themes, about, onboarding, loading and analytics.
+- `main.py api` for the Electron and Android control planes.
+
+### Changed
+- README and environment template now document authenticated real MT5 execution only.
+- Runtime status reports waiting instead of suggesting offline/fake prices when MT5 is unavailable.
+
+
 All notable changes to this project are documented here.
 The format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 and the project adheres to [Semantic Versioning](https://semver.org/).

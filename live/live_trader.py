@@ -18,7 +18,6 @@ from market.filters import (
     is_session_allowed,
     session_strength,
 )
-from paper.paper_broker import PaperBroker
 from risk.basket import BasketManager
 from risk.position_sizing import lots_for_risk
 from risk.risk_manager import RiskManager
@@ -48,7 +47,7 @@ class CycleResult:
 
 
 class LiveTrader:
-    """Owns the realtime loop; shared by PAPER and LIVE modes."""
+    """Owns the realtime loop for an authenticated real MT5 account."""
 
     def __init__(
         self,
@@ -105,11 +104,20 @@ class LiveTrader:
         now = now or utcnow()
         result = CycleResult(ran_at=now)
         broker = self.orders.broker
-        await self._feed_paper_prices()
+        # Research/test adapters may expose ``set_price``; the production
+        # LIVE path never reaches this branch and only consumes MT5 ticks.
+        if self.settings.mode != "LIVE" and hasattr(broker, "set_price"):
+            for symbol in self.settings.symbol_list:
+                quote = await self.data.get_latest_price(symbol)
+                if quote is not None:
+                    broker.set_price(symbol, quote[0], quote[1])
         account = broker.account_info()
         if account is None:
-            result.notes.append("no account info")
-            self.state.update(status_message="Waiting for broker connection")
+            result.notes.append("no authenticated account info")
+            self.state.update(status_message=(
+                "Waiting for authenticated MT5 session..."
+                if self.settings.mode == "LIVE" else "Waiting for broker connection"
+            ))
             return result
         positions = broker.get_positions()
         self._reconcile_closed(positions)
@@ -419,14 +427,3 @@ class LiveTrader:
             "action": "MANUAL CLOSE", "profit": round(profit, 2),
             "reason": reason,
         })
-
-    # -- paper pricing --------------------------------------------------------------
-    async def _feed_paper_prices(self) -> None:
-        """Push latest quotes into the paper broker from the data engine."""
-        broker = self.orders.broker
-        if not isinstance(broker, PaperBroker):
-            return
-        for symbol in self.settings.symbol_list:
-            quote = await self.data.get_latest_price(symbol)
-            if quote is not None:
-                broker.set_price(symbol, quote[0], quote[1])

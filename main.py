@@ -1,13 +1,10 @@
-"""ZeroTrace FX AI - application entry point.
+"""ZeroTrace FX AI production entry point.
 
-Modes:
-  dashboard  launch the desktop UI (default; also the .exe target)
-  trade      run the headless trading loop (PAPER or LIVE from .env)
-  backtest   run a historical simulation from data/{SYMBOL}_M5.csv
-             (add --learn to train the AI memory from simulated trades)
-  doctor     explain gate-by-gate why the engine is or isn't trading
-  ai         show what the adaptive AI has learned
-  version    print the version and exit
+The released application has one operating mode: authenticated real-money MT5
+trading. It never asks for MT5 credentials and never falls back to paper,
+demo, backtest, synthetic-feed, or simulated-order execution. If the official
+terminal API cannot confirm a real account, the UI remains in the explicit
+``Waiting for authenticated MT5 session...`` state.
 """
 from __future__ import annotations
 
@@ -16,6 +13,7 @@ import asyncio
 import os
 import sys
 import threading
+import time
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 
@@ -24,29 +22,50 @@ from config.settings import get_settings  # noqa: E402
 from utils.logging_setup import setup_logging  # noqa: E402
 
 
+def _production_engine():
+    """Construct the real-only engine without importing research adapters."""
+    from core.engine import ZeroTraceEngine
+
+    return ZeroTraceEngine(get_settings(), allow_research=False)
+
+
 def cmd_version() -> int:
-    """Print version info."""
+    """Print version and runtime policy."""
     print(f"{APP_NAME} v{APP_VERSION}")
-    print("Institutional Smart Money Autonomous Forex Trading Platform")
+    print("Authenticated real MT5 execution only")
     print(f"Python {sys.version.split()[0]} on {sys.platform}")
     return 0
 
 
-def cmd_trade() -> int:
-    """Run the headless trading loop."""
-    from core.engine import ZeroTraceEngine
+def _run_engine(engine) -> None:
+    """Run the real trader loop in a worker thread for the desktop shell."""
+    async def runner() -> None:
+        engine.state.update(running=True, status_message="Engine running")
+        while engine.state.running:
+            if not engine.state.paused and not engine.state.kill_switch:
+                try:
+                    await engine.trader.cycle()
+                except Exception as exc:  # noqa: BLE001
+                    engine.state.update(status_message=f"Cycle error: {exc}")
+            await asyncio.sleep(max(1, engine.settings.poll_interval_sec))
+        engine.state.update(running=False)
 
-    settings = get_settings()
-    setup_logging(settings.logs_dir, settings.log_level)
-    engine = ZeroTraceEngine(settings)
-    print(f"{APP_NAME} v{APP_VERSION} - {settings.mode} headless trading")
-    print(f"Symbols: {', '.join(settings.symbol_list)} | "
-          f"Basket target: ${settings.basket_target:,.2f} | "
-          f"Confidence: {settings.confidence_threshold:.0f}")
+    asyncio.run(runner())
+
+
+def cmd_trade() -> int:
+    """Run the headless real-money loop."""
+    engine = _production_engine()
+    setup_logging(engine.settings.logs_dir, engine.settings.log_level)
+    print(f"{APP_NAME} v{APP_VERSION} - authenticated real MT5 execution")
+    print(f"Symbols: {', '.join(engine.settings.symbol_list)} | "
+          f"Basket target: ${engine.settings.basket_target:,.2f} | "
+          f"Confidence: {engine.settings.confidence_threshold:.0f}")
+    engine.connect()
     if engine.start_remote_api():
-        print(f"Remote API on port {settings.remote_api_port} (Android app)")
+        print(f"Remote API on port {engine.settings.remote_api_port}")
     try:
-        asyncio.run(engine.run())
+        asyncio.run(engine.trader.run_forever())
     except KeyboardInterrupt:
         print("\nShutdown requested - stopping...")
     finally:
@@ -55,179 +74,116 @@ def cmd_trade() -> int:
 
 
 def cmd_dashboard() -> int:
-    """Run the trading engine in the background with the desktop dashboard."""
-    from core.engine import ZeroTraceEngine
+    """Run the real engine behind the native desktop dashboard."""
     from dashboard.viewmodel import DashboardViewModel
+    from dashboard.app import launch_dashboard
 
-    settings = get_settings()
-    setup_logging(settings.logs_dir, settings.log_level)
-    engine = ZeroTraceEngine(settings)
-    if not engine.connect():
-        print("WARNING: venue connection failed - dashboard will show idle state")
+    engine = _production_engine()
+    setup_logging(engine.settings.logs_dir, engine.settings.log_level)
+    engine.connect()
 
-    def _loop() -> None:
-        async def _runner() -> None:
-            engine.state.update(running=True, status_message="Engine running")
-            while engine.state.running:
-                if not engine.state.paused and not engine.state.kill_switch:
-                    try:
-                        await engine.trader.cycle()
-                    except Exception as exc:  # noqa: BLE001
-                        engine.state.update(status_message=f"Cycle error: {exc}")
-                try:
-                    await asyncio.sleep(max(1, settings.poll_interval_sec))
-                except asyncio.CancelledError:
-                    break
-            engine.state.update(running=False)
-
-        asyncio.run(_runner())
-
-    def _pause(paused: bool) -> None:
-        engine.state.update(status_message="Paused by operator" if paused else "Resumed")
-
-    def _close_all() -> dict:
-        return engine.manual_close_all()
-
-    def _reset_kill() -> None:
-        engine.risk.reset_kill_switch()
-
-    def _diagnostics() -> str:
-        from core.diagnostics import collect, render
-
-        return render(asyncio.run(collect(engine)))
-
-    worker = threading.Thread(target=_loop, daemon=True)
+    worker = threading.Thread(target=_run_engine, args=(engine,), daemon=True,
+                              name="zerotrace-engine")
     worker.start()
     engine.start_remote_api()
-    try:
-        from dashboard.app import launch_dashboard
 
-        vm = DashboardViewModel(engine.state, on_pause=_pause,
-                                on_close_all=_close_all, on_reset_kill=_reset_kill,
-                                on_diagnostics=_diagnostics)
+    def pause(paused: bool) -> None:
+        engine.state.update(status_message="Paused by operator" if paused else "Resumed")
+
+    def diagnostics() -> str:
+        from core.diagnostics import collect, render
+        return render(asyncio.run(collect(engine)))
+
+    vm = DashboardViewModel(
+        engine.state,
+        on_pause=pause,
+        on_close_all=engine.manual_close_all,
+        on_reset_kill=engine.risk.reset_kill_switch,
+        on_diagnostics=diagnostics,
+    )
+    try:
         return launch_dashboard(vm)
     finally:
         engine.state.update(running=False)
+        worker.join(timeout=3)
         engine.shutdown()
 
 
 def cmd_doctor() -> int:
-    """Print a gate-by-gate report explaining why the engine is/isn't trading."""
-    import asyncio
-
+    """Print authenticated-session and risk-gate diagnostics."""
     from core.diagnostics import collect, render
-    from core.engine import ZeroTraceEngine
 
-    settings = get_settings()
-    engine = ZeroTraceEngine(settings)
+    engine = _production_engine()
     engine.connect()
     try:
-        report = asyncio.run(collect(engine))
+        print(render(asyncio.run(collect(engine))))
     finally:
         engine.shutdown()
-    print(render(report))
     return 0
 
 
-def cmd_backtest(args: argparse.Namespace) -> int:
-    """Run a backtest from an M5 CSV file and print the performance report."""
-    import pandas as pd
-
-    from backtest.charts import plot_equity_curve
-    from backtest.engine import BacktestEngine
-    from backtest.validation import monte_carlo
-    from core.engine import ZeroTraceEngine, default_spec
-
-    settings = get_settings()
-    setup_logging(settings.logs_dir, settings.log_level)
-    symbol = args.symbol.upper()
-    csv_path = args.csv or os.path.join(settings.data_dir, f"{symbol}_M5.csv")
-    if not os.path.exists(csv_path):
-        print(f"Data file not found: {csv_path}")
-        print("Export M5 history to CSV (time,open,high,low,close) or place it in data/.")
+def cmd_api() -> int:
+    """Run the local/remote real-engine API for Electron or Android."""
+    engine = _production_engine()
+    engine.connect()
+    if not engine.start_remote_api():
+        print("Remote API disabled or REMOTE_API_TOKEN is missing (16+ characters).")
+        engine.shutdown()
         return 2
-    frame = pd.read_csv(csv_path)
-    engine = ZeroTraceEngine(settings)
-    backtester = BacktestEngine(
-        engine.strategy, settings, default_spec(symbol),
-        learner=engine.learner if getattr(args, "learn", False) else None,
-    )
-    print(f"Backtesting {symbol} on {len(frame)} M5 bars from {csv_path} ...")
-    result = backtester.run(
-        symbol, frame, warmup_bars=args.warmup, signal_every=args.every,
-        initial_balance=args.balance, spread_pips=args.spread,
-    )
-    if getattr(args, "learn", False):
-        engine.learner.save()
-        print(f"AI memory trained: {engine.learner.state.trades_learned} trades learned in total")
-    print(f"\n=== Backtest report: {symbol} ===")
-    assert result.report is not None
-    for line in result.report.summary_lines():
-        print(line)
-    mc = monte_carlo([t.net for t in result.trades],
-                     initial_balance=args.balance, simulations=500)
-    print(f"Monte Carlo (500): median {mc.median_final:,.2f} | "
-          f"P5 {mc.percentile_5:,.2f} | P95 {mc.percentile_95:,.2f} | "
-          f"P(profit) {mc.prob_profit:.1f}%")
-    os.makedirs(settings.reports_dir, exist_ok=True)
-    chart = os.path.join(settings.reports_dir, f"backtest_{symbol}.png")
-    plot_equity_curve(result.equity_curve, chart, title=f"ZeroTrace FX AI - {symbol} Backtest")
-    print(f"Equity chart saved: {chart}")
-    if result.report.monthly_returns:
-        print("Monthly returns (%):")
-        for month, pct in sorted(result.report.monthly_returns.items()):
-            print(f"  {month}: {pct:+.2f}%")
-    return 0
+    worker = threading.Thread(target=_run_engine, args=(engine,), daemon=True,
+                              name="zerotrace-engine")
+    worker.start()
+    print(f"ZeroTrace API listening on {engine.settings.remote_api_host}:"
+          f"{engine.settings.remote_api_port}")
+    try:
+        while True:
+            time.sleep(1)
+    except KeyboardInterrupt:
+        return 0
+    finally:
+        engine.state.update(running=False)
+        worker.join(timeout=3)
+        engine.shutdown()
 
 
 def build_parser() -> argparse.ArgumentParser:
-    """CLI argument parser."""
+    """Build the intentionally small production CLI."""
     parser = argparse.ArgumentParser(description=f"{APP_NAME} v{APP_VERSION}")
-    sub = parser.add_subparsers(dest="mode")
-    sub.add_parser("dashboard", help="Launch the desktop dashboard (default)")
-    sub.add_parser("trade", help="Run headless trading (PAPER/LIVE from .env)")
-    sub.add_parser("version", help="Print version and exit")
-    bt = sub.add_parser("backtest", help="Run a historical backtest from CSV")
-    bt.add_argument("--symbol", default="EURUSD", help="Symbol to backtest")
-    bt.add_argument("--csv", default="", help="Custom M5 CSV path")
-    bt.add_argument("--warmup", type=int, default=300, help="Warmup bars")
-    bt.add_argument("--every", type=int, default=3, help="Signal check stride (bars)")
-    bt.add_argument("--balance", type=float, default=10000.0, help="Initial balance")
-    bt.add_argument("--spread", type=float, default=1.2, help="Spread in pips")
-    bt.add_argument("--learn", action="store_true",
-                    help="Train the persistent AI memory from every simulated trade")
-    sub.add_parser("ai", help="Show what the adaptive AI has learned so far")
-    sub.add_parser("doctor", help="Diagnose why the engine is not trading")
+    sub = parser.add_subparsers(dest="command")
+    sub.add_parser("dashboard", help="Launch the real-mode desktop dashboard")
+    sub.add_parser("trade", help="Run authenticated real MT5 trading headlessly")
+    sub.add_parser("doctor", help="Diagnose the MT5 session and trading gates")
+    sub.add_parser("api", help="Run the authenticated API for the desktop/mobile shell")
+    sub.add_parser("ai", help="Show persistent learning statistics from real trades")
+    sub.add_parser("version", help="Print version and execution policy")
     return parser
 
 
 def cmd_ai() -> int:
-    """Print the adaptive learner's memory summary."""
+    """Print learning statistics without touching a venue."""
     import json
-
     from strategy.learning import AdaptiveLearner
 
     settings = get_settings()
-    learner = AdaptiveLearner(os.path.join(settings.logs_dir, settings.learning_memory_file))
-    print(json.dumps(learner.summary(), indent=2))
+    path = os.path.join(settings.logs_dir, settings.learning_memory_file)
+    print(json.dumps(AdaptiveLearner(path).summary(), indent=2))
     return 0
 
 
 def main(argv: list[str] | None = None) -> int:
-    """Dispatch CLI modes (default: dashboard)."""
-    parser = build_parser()
-    args = parser.parse_args(argv)
-    mode = args.mode or "dashboard"
-    if mode == "version":
+    """Dispatch production commands."""
+    args = build_parser().parse_args(argv)
+    command = args.command or "dashboard"
+    if command == "version":
         return cmd_version()
-    if mode == "trade":
+    if command == "trade":
         return cmd_trade()
-    if mode == "ai":
-        return cmd_ai()
-    if mode == "doctor":
+    if command == "doctor":
         return cmd_doctor()
-    if mode == "backtest":
-        return cmd_backtest(args)
+    if command == "api":
+        return cmd_api()
+    if command == "ai":
+        return cmd_ai()
     return cmd_dashboard()
 
 

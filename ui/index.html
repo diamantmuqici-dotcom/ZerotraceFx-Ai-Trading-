@@ -1,0 +1,94 @@
+<!doctype html>
+<html lang="en" data-theme="carbon">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="color-scheme" content="dark light">
+  <title>ZeroTrace FX AI</title>
+  <link rel="stylesheet" href="../css/reset.css">
+  <link rel="stylesheet" href="../css/variables.css">
+  <link rel="stylesheet" href="../css/themes.css">
+  <link rel="stylesheet" href="../css/base.css">
+  <link rel="stylesheet" href="../css/glass.css">
+  <link rel="stylesheet" href="../css/cards.css">
+  <link rel="stylesheet" href="../css/buttons.css">
+  <link rel="stylesheet" href="../css/sidebar.css">
+  <link rel="stylesheet" href="../css/navbar.css">
+  <link rel="stylesheet" href="../css/charts.css">
+  <link rel="stylesheet" href="../css/animations.css">
+  <link rel="stylesheet" href="../css/particles.css">
+  <link rel="stylesheet" href="../css/responsive.css">
+  <link rel="stylesheet" href="../css/android.css">
+  <link rel="stylesheet" href="../css/windows.css">
+</head>
+<body>
+  <div class="particles" aria-hidden="true" data-particles></div>
+  <div class="app-shell">
+    <aside class="sidebar">
+      <a class="brand" href="#dashboard" data-route="dashboard" aria-label="ZeroTrace dashboard">
+        <span class="brand-mark">ZT</span><span><span class="brand-name">ZeroTrace FX</span><br><span class="brand-version">AI TERMINAL · 2.0.0</span></span>
+      </a>
+      <nav class="nav" aria-label="Primary navigation">
+        <div class="nav-label">Workspace</div>
+        <a class="nav-link is-active" href="#dashboard" data-route="dashboard"><span class="nav-icon">◈</span><span>Dashboard</span></a>
+        <a class="nav-link" href="#trades" data-route="trades"><span class="nav-icon">↗</span><span>Live trades</span></a>
+        <a class="nav-link" href="#journal" data-route="journal"><span class="nav-icon">▤</span><span>Journal</span></a>
+        <a class="nav-link" href="#analytics" data-route="analytics"><span class="nav-icon">⌁</span><span>Analytics</span></a>
+        <a class="nav-link" href="#ai" data-route="ai"><span class="nav-icon">✦</span><span>AI engine</span></a>
+        <a class="nav-link" href="#risk" data-route="risk"><span class="nav-icon">△</span><span>Risk</span></a>
+        <div class="nav-label">Monitor</div>
+        <a class="nav-link" href="#watchlist" data-route="watchlist"><span class="nav-icon">☆</span><span>Watchlist</span></a>
+        <a class="nav-link" href="#calendar" data-route="calendar"><span class="nav-icon">□</span><span>Calendar</span></a>
+        <div class="nav-label">System</div>
+        <a class="nav-link" href="#settings" data-route="settings"><span class="nav-icon">⚙</span><span>Settings</span></a>
+        <a class="nav-link" href="#themes" data-route="themes"><span class="nav-icon">◐</span><span>Themes</span></a>
+        <a class="nav-link" href="#about" data-route="about"><span class="nav-icon">i</span><span>About</span></a>
+      </nav>
+      <div class="sidebar-footer">
+        <div class="venue-status"><span class="status-dot live-pulse" data-venue-dot></span><span data-venue-status>Waiting for authenticated MT5 session...</span></div>
+        <button class="button button-danger" type="button" data-action="close-all">Close all</button>
+      </div>
+    </aside>
+    <main class="main">
+      <header class="topbar">
+        <div><span class="eyebrow" data-page-kicker>Real-time execution</span><div class="muted mono" data-clock>--:--:-- UTC</div></div>
+        <div class="topbar-tools">
+          <label class="search"><span>⌕</span><input type="search" placeholder="Command palette · Ctrl K" data-search></label>
+          <button class="button icon-button" type="button" data-action="theme" aria-label="Cycle theme">◐</button>
+          <button class="button icon-button" type="button" data-action="notifications" aria-label="Notifications">♢</button>
+          <div class="session-pill" data-session-pill><span class="status-dot"></span><span data-session-label>MT5 waiting</span></div>
+        </div>
+      </header>
+
+      <section class="page is-active" data-page="dashboard">
+        <div class="page-header"><div><span class="eyebrow">Institutional workspace</span><h1 class="page-title">Good evening, operator.</h1><p class="page-copy">Real account intelligence, explainable AI and execution controls. No simulated data is shown.</p></div><div class="segmented" data-symbol-switcher><button class="is-selected" data-symbol="ALL">All symbols</button><button data-symbol="EURUSD">EURUSD</button><button data-symbol="XAUUSD">XAUUSD</button></div></div>
+        <div class="grid grid-kpi">
+          <article class="card glass card-kpi"><div class="card-label">Balance</div><div class="card-value mono" data-field="balance">—</div><div class="card-sub">real account currency</div></article>
+          <article class="card glass card-kpi"><div class="card-label">Equity</div><div class="card-value mono" data-field="equity">—</div><div class="card-sub" data-field="equity-change">waiting for MT5</div></article>
+          <article class="card glass card-kpi"><div class="card-label">Floating P&amp;L</div><div class="card-value mono" data-field="floating">—</div><div class="card-sub">all open positions</div></article>
+          <article class="card glass card-kpi"><div class="card-label">Today</div><div class="card-value mono" data-field="daily_pnl">—</div><div class="card-sub">realised session P&amp;L</div></article>
+          <article class="card glass card-kpi"><div class="card-label">Win rate</div><div class="card-value mono" data-field="win_rate">—</div><div class="card-sub" data-field="trade_count">no closed trades</div></article>
+          <article class="card glass card-kpi"><div class="card-label">Drawdown</div><div class="card-value mono" data-field="drawdown_pct">—</div><div class="card-sub">risk guardrail</div></article>
+        </div>
+        <div class="grid grid-main mt-16">
+          <article class="card glass chart-card"><div class="section-head"><h2 class="section-title">Equity curve</h2><span class="muted mono" data-field="updated_at">waiting</span></div><div class="chart-wrap"><svg class="chart-svg" viewBox="0 0 900 280" preserveAspectRatio="none" data-equity-chart aria-label="Live equity chart"><defs><linearGradient id="chart-gradient" x1="0" x2="0" y1="0" y2="1"><stop offset="0" stop-color="var(--accent)" stop-opacity=".55"/><stop offset="1" stop-color="var(--accent)" stop-opacity="0"/></linearGradient></defs><g data-chart-grid></g><path class="chart-area" data-chart-area></path><path class="chart-line" data-chart-line></path><text class="chart-axis" x="8" y="270">waiting for authenticated MT5 session</text></svg></div></article>
+          <div class="stack"><article class="card glass relative"><div class="section-head"><h2 class="section-title">Basket control</h2><span class="muted mono" data-field="basket_direction">—</span></div><div class="card-value mono" data-field="basket_profit">—</div><div class="card-sub" data-field="basket_target">Target unavailable</div><div class="list" data-basket-list><div class="metric-row"><span class="metric-label">Open positions</span><strong class="metric-value" data-field="position_count">—</strong></div><div class="metric-row"><span class="metric-label">Peak basket</span><strong class="metric-value" data-field="basket_highest">—</strong></div><div class="metric-row"><span class="metric-label">Trailing</span><strong class="metric-value" data-field="trailing_active">—</strong></div></div></article><article class="card glass relative"><div class="section-head"><h2 class="section-title">AI confidence</h2><span class="mono" data-field="last_signal">HOLD</span></div><div class="confidence-wrap"><svg class="confidence-ring" viewBox="0 0 120 120"><circle class="ring-bg" cx="60" cy="60" r="48"/><circle class="ring-value" cx="60" cy="60" r="48" pathLength="100" data-confidence-ring/></svg><div class="confidence-center"><strong class="confidence-value" data-field="last_confidence">—</strong><span class="confidence-label">confidence</span></div></div><div class="metric-row"><span class="metric-label">Symbol</span><strong class="metric-value" data-field="active_symbol">—</strong></div><div class="metric-row"><span class="metric-label">Session</span><strong class="metric-value" data-field="session">—</strong></div></article></div>
+        </div>
+        <article class="card glass mt-16"><div class="section-head"><h2 class="section-title">Live positions</h2><a href="#trades" data-route="trades" class="muted">View all →</a></div><div class="table-scroll"><div class="list" data-positions><div class="empty">Waiting for authenticated MT5 session...</div></div></div></article>
+      </section>
+
+      <section class="page" data-page="trades"><div class="page-header"><div><span class="eyebrow">Execution blotter</span><h1 class="page-title">Live trades</h1><p class="page-copy">Positions reported by the authenticated MT5 terminal. Closing is immediate and irreversible.</p></div><button class="button button-danger" data-action="close-all">Close all positions</button></div><article class="card glass"><div class="list" data-trades-table><div class="empty">Waiting for authenticated MT5 session...</div></div></article></section>
+      <section class="page" data-page="journal"><div class="page-header"><div><span class="eyebrow">Audit trail</span><h1 class="page-title">Journal</h1><p class="page-copy">Signals, fills and realised closes persisted locally for review.</p></div><label class="search"><span>⌕</span><input type="search" placeholder="Search journal" data-journal-search></label></div><article class="card glass"><div class="list" data-journal-list><div class="empty">No realised trades loaded.</div></div></article></section>
+      <section class="page" data-page="analytics"><div class="page-header"><div><span class="eyebrow">Performance intelligence</span><h1 class="page-title">Analytics</h1><p class="page-copy">Use realised account history to understand expectancy, risk and execution quality.</p></div></div><div class="grid grid-two"><article class="card glass"><h2 class="section-title">Closed trade sample</h2><div class="metric-row"><span class="metric-label">Total trades</span><strong class="metric-value" data-field="total_trades">—</strong></div><div class="metric-row"><span class="metric-label">Winning trades</span><strong class="metric-value" data-field="winning_trades">—</strong></div><div class="metric-row"><span class="metric-label">Weekly P&amp;L</span><strong class="metric-value" data-field="weekly_pnl">—</strong></div></article><article class="card glass"><h2 class="section-title">Execution status</h2><div class="metric-row"><span class="metric-label">Venue</span><strong class="metric-value">MT5 Desktop API</strong></div><div class="metric-row"><span class="metric-label">Data source</span><strong class="metric-value">Closed terminal bars</strong></div><div class="metric-row"><span class="metric-label">Simulation</span><strong class="metric-value positive">Disabled</strong></div></article></div></section>
+      <section class="page" data-page="ai"><div class="page-header"><div><span class="eyebrow">Explainable intelligence</span><h1 class="page-title">AI engine</h1><p class="page-copy">Every decision is an auditable confluence of structure, liquidity, volatility and risk gates.</p></div></div><div class="grid grid-main"><article class="card glass"><div class="section-head"><h2 class="section-title">Latest reasoning</h2><span class="mono" data-field="last_signal">HOLD</span></div><div class="list" data-reasoning><div class="empty">Waiting for the next authenticated market scan.</div></div></article><article class="card glass"><h2 class="section-title">Learning memory</h2><div class="metric-row"><span class="metric-label">Trades learned</span><strong class="metric-value" data-field="ai_trades_learned">—</strong></div><p class="page-copy">Adaptive memory is local to this installation and is updated only from real closed trades.</p></article></div></section>
+      <section class="page" data-page="risk"><div class="page-header"><div><span class="eyebrow">Capital protection</span><h1 class="page-title">Risk dashboard</h1><p class="page-copy">The engine blocks new entries when account-level limits, spreads, news or terminal health fail.</p></div></div><div class="grid grid-two"><article class="card glass"><h2 class="section-title">Account guardrails</h2><div class="metric-row"><span class="metric-label">Drawdown</span><strong class="metric-value" data-field="drawdown_pct">—</strong></div><div class="metric-row"><span class="metric-label">Daily P&amp;L</span><strong class="metric-value" data-field="daily_pnl">—</strong></div><div class="metric-row"><span class="metric-label">Weekly P&amp;L</span><strong class="metric-value" data-field="weekly_pnl">—</strong></div></article><article class="card glass"><h2 class="section-title">Kill switch</h2><div class="card-value" data-field="kill_switch">—</div><p class="page-copy">A latched kill switch requires deliberate operator reset after the cause is understood.</p></article></div></section>
+      <section class="page" data-page="watchlist"><div class="page-header"><div><span class="eyebrow">Market monitor</span><h1 class="page-title">Watchlist</h1><p class="page-copy">Symbols come from the broker and configured favorites. Quotes are never fabricated.</p></div></div><article class="card glass"><div class="list" data-watchlist><div class="empty">Waiting for the authenticated terminal symbol feed.</div></div></article></section>
+      <section class="page" data-page="calendar"><div class="page-header"><div><span class="eyebrow">Macro risk</span><h1 class="page-title">Calendar</h1><p class="page-copy">Configured high-impact event windows are applied before an entry reaches the terminal.</p></div></div><article class="card glass"><div class="empty">Calendar events are loaded from the configured news source.</div></article></section>
+      <section class="page" data-page="settings"><div class="page-header"><div><span class="eyebrow">Local preferences</span><h1 class="page-title">Settings</h1><p class="page-copy">Runtime settings are read from the local environment. MT5 passwords are never requested or stored.</p></div></div><article class="card glass"><div class="metric-row"><span class="metric-label">Execution mode</span><strong class="metric-value positive">AUTHENTICATED REAL ONLY</strong></div><div class="metric-row"><span class="metric-label">Authentication</span><strong class="metric-value">Already logged-in MT5 session</strong></div><div class="metric-row"><span class="metric-label">Storage</span><strong class="metric-value">Local journal and preferences</strong></div></article></section>
+      <section class="page" data-page="themes"><div class="page-header"><div><span class="eyebrow">Visual system</span><h1 class="page-title">Themes</h1><p class="page-copy">Switch the terminal surface without affecting trading logic.</p></div></div><div class="grid grid-two" data-themes></div></section>
+      <section class="page" data-page="about"><div class="page-header"><div><span class="eyebrow">ZeroTrace FX AI</span><h1 class="page-title">A quieter trading terminal.</h1><p class="page-copy">Version 2.0.0 is built around official MT5 connectivity, explainable SMC analysis, persistent local audit trails and conservative capital protection.</p></div></div><article class="card glass"><div class="metric-row"><span class="metric-label">Version</span><strong class="metric-value">2.0.0</strong></div><div class="metric-row"><span class="metric-label">Venue</span><strong class="metric-value">MetaTrader 5 official API</strong></div><div class="metric-row"><span class="metric-label">Trading policy</span><strong class="metric-value positive">REAL MODE ONLY</strong></div></article></section>
+    </main>
+  </div>
+  <script type="module" src="../js/app.js"></script>
+</body>
+</html>

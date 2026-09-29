@@ -13,14 +13,14 @@ from utils.journal import TradeJournal
 def test_app_constants():
     """Product identity constants are set."""
     assert APP_NAME == "ZeroTrace FX AI"
-    assert APP_VERSION == "1.2.0"
+    assert APP_VERSION == "2.0.0"
     assert DEFAULT_SYMBOLS == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
 
 
 def test_settings_defaults():
     """Defaults match the institutional specification."""
     settings = Settings()
-    assert settings.mode == "PAPER"
+    assert settings.mode == "LIVE"
     assert settings.symbol_list == ["XAUUSD", "EURUSD", "GBPUSD", "USDJPY"]
     assert settings.confidence_threshold == 85.0
     assert settings.risk_percent == 1.0
@@ -74,7 +74,7 @@ async def test_event_bus_pub_sub():
 def test_runtime_state_snapshot_and_trades():
     """State tracks equity, trades and win rate for the dashboard."""
     state = RuntimeState()
-    assert state.snapshot()["mode"] == "PAPER"
+    assert state.snapshot()["mode"] == "LIVE"
     state.update(balance=10000.0, equity=10100.0)
     state.push_trade({"symbol": "EURUSD", "profit": 50.0})
     state.push_trade({"symbol": "EURUSD", "profit": -20.0})

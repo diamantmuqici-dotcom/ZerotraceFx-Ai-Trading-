@@ -40,10 +40,12 @@ class SignalAction(str, Enum):
 
 
 class AccountMode(str, Enum):
-    """Trading account mode."""
+    """Trading account mode; production uses LIVE/REAL only."""
 
-    PAPER = "PAPER"
     LIVE = "LIVE"
+    REAL = "REAL"
+    # Legacy research enum values are retained for regression fixtures only.
+    PAPER = "PAPER"
     BACKTEST = "BACKTEST"
 
 

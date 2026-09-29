@@ -25,7 +25,7 @@ a = Analysis(
     hiddenimports=[
         "pandas", "numpy", "pydantic", "pydantic_settings", "dotenv",
         "aiohttp", "aiohttp.web", "matplotlib", "MetaTrader5", "PySide6",
-        "remote.api", "strategy.learning",
+        "remote.api", "strategy.learning", "mt5.detector", "database.sqlite", "database.migrations",
     ],
     hookspath=[],
     runtime_hooks=[],

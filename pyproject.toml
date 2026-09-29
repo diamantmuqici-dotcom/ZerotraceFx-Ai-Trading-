@@ -4,10 +4,10 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "zerotrace-fx-ai"
-version = "1.1.0"
+version = "2.0.0"
 description = "Institutional Smart Money Autonomous Forex Trading Platform"
 readme = "README.md"
-requires-python = ">=3.11"
+requires-python = ">=3.13"
 license = { text = "MIT" }
 dependencies = [
     "pandas>=2.0,<4",
@@ -24,7 +24,7 @@ windows = ['MetaTrader5; sys_platform == "win32"', 'PySide6>=6.6; sys_platform =
 test = ["pytest>=8.0", "pytest-asyncio>=0.23"]
 
 [tool.setuptools.packages.find]
-include = ["core*", "config*", "market*", "smart_money*", "strategy*", "execution*", "risk*", "dashboard*", "backtest*", "paper*", "live*", "utils*"]
+include = ["core*", "config*", "ai*", "market*",  "smart_money*", "strategy*", "execution*", "risk*", "dashboard*", "live*", "remote*", "mt5*", "database*", "utils*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"

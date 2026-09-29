@@ -1,0 +1,1 @@
+export function createSearch(router){const routes=["dashboard","trades","journal","analytics","ai","risk","watchlist","calendar","settings","themes","about"];return query=>{const value=query.trim().toLowerCase();const match=routes.find(route=>route.includes(value));if(value&&match)router.go(match)}}

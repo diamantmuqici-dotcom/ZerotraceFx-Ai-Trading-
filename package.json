@@ -1,0 +1,26 @@
+{
+  "name": "zerotrace-fx-ai",
+  "version": "2.0.0",
+  "description": "Authenticated real-mode MT5 trading terminal",
+  "main": "electron/main.js",
+  "private": true,
+  "scripts": {
+    "start": "electron .",
+    "dev": "electron .",
+    "lint": "node --check electron/main.js && node --check electron/preload.js",
+    "package:windows": "electron-builder --win nsis portable --publish never"
+  },
+  "build": {
+    "appId": "com.zerotrace.fxai",
+    "productName": "ZeroTrace FX AI",
+    "artifactName": "ZeroTraceFXAI-${version}-${os}-${arch}.${ext}",
+    "files": ["electron/**/*", "ui/**/*", "css/**/*", "js/**/*", "package.json"],
+    "extraResources": [{"from": "release-python/ZeroTraceFXAI", "to": "python-app"}],
+    "win": {"target": ["nsis", "portable"], "icon": "assets/app.ico"},
+    "nsis": {"oneClick": false, "allowToChangeInstallationDirectory": true}
+  },
+  "devDependencies": {
+    "electron": "^32.2.7",
+    "electron-builder": "^25.1.8"
+  }
+}

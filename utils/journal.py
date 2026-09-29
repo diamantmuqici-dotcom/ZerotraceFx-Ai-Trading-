@@ -8,6 +8,9 @@ from datetime import datetime
 from typing import Any, Optional
 
 from core.types import TradeSignal
+from database.models import TradeEvent
+from database.sqlite import SQLiteStore
+from database.trades import TradeRepository
 
 
 class TradeJournal:
@@ -17,6 +20,7 @@ class TradeJournal:
         """Create the journal directory and file paths."""
         self.directory = directory
         os.makedirs(directory, exist_ok=True)
+        self._repository = TradeRepository(SQLiteStore(os.path.join(directory, "zerotrace.sqlite3")))
         self.jsonl_path = os.path.join(directory, "journal.jsonl")
         self.csv_path = os.path.join(directory, "journal.csv")
         self._csv_header = [
@@ -34,6 +38,23 @@ class TradeJournal:
             fh.write(json.dumps(record, default=str) + "\n")
         with open(self.csv_path, "a", newline="", encoding="utf-8") as fh:
             csv.writer(fh).writerow([record.get(col, "") for col in self._csv_header])
+        # SQLite is the shared query store; JSONL/CSV remain human-readable
+        # export mirrors. A torn export must never prevent a broker event from
+        # reaching the primary local database.
+        try:
+            stamp = str(record.get("time", datetime.now().isoformat()))
+            event_time = datetime.fromisoformat(stamp.replace("Z", "+00:00"))
+            self._repository.append(TradeEvent(
+                event=str(record.get("event", "")), event_time=event_time,
+                symbol=str(record.get("symbol", "")), action=str(record.get("action", "")),
+                ticket=str(record.get("ticket", "")), volume=float(record.get("volume", 0) or 0),
+                entry=float(record.get("entry", 0) or 0), exit=float(record.get("exit", 0) or 0),
+                profit=float(record.get("profit", 0) or 0),
+                confidence=float(record.get("confidence", 0) or 0),
+                reason=str(record.get("reason", "")),
+            ))
+        except (TypeError, ValueError, OverflowError):
+            pass
 
     def record_signal(self, signal: TradeSignal, note: str = "") -> None:
         """Journal a strategy signal (entry or hold)."""
@@ -96,6 +117,17 @@ class TradeJournal:
         record.update({k: v for k, v in detail.items()})
         with open(self.jsonl_path, "a", encoding="utf-8") as fh:
             fh.write(json.dumps(record, default=str) + "\n")
+        try:
+            self._repository.append(TradeEvent(
+                event=str(record["event"]),
+                event_time=datetime.fromisoformat(str(record["time"])),
+                symbol=str(detail.get("symbol", "BASKET")),
+                action=str(detail.get("action", event)),
+                profit=float(detail.get("profit", 0) or 0),
+                reason=str(detail.get("reason", event)),
+            ))
+        except (TypeError, ValueError, OverflowError):
+            pass
 
     def read_closes(self, limit: Optional[int] = None) -> list[dict[str, Any]]:
         """Closed-trade history (oldest first), rebuilt from the journal.

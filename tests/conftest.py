@@ -80,7 +80,7 @@ def pullback_df() -> pd.DataFrame:
 @pytest.fixture()
 def settings() -> Settings:
     """Default settings object (no .env required)."""
-    return Settings()
+    return Settings(account_mode="PAPER")
 
 
 @pytest.fixture()

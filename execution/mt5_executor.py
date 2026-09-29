@@ -285,8 +285,16 @@ class MT5Executor(BrokerInterface):
         if result is None or result.retcode != mt5.TRADE_RETCODE_DONE:
             message = "close failed" if result is None else f"retcode={result.retcode}"
             return CloseResult(False, ticket=str(ticket), message=message, latency_ms=latency)
-        time.sleep(0.05)  # allow terminal profit settlement before reading back
-        profit = target.profit  # best available without deal-history scan
+        time.sleep(0.08)  # allow terminal deal settlement before reading back
+        if abs(lots - target.volume) < 1e-9:
+            profit = self.client.position_deals_profit(str(ticket))
+            if profit is None:
+                profit = target.profit
+        else:
+            # A partial close is proportional to the broker-reported floating
+            # result; the next reconciliation cycle replaces it with the
+            # authoritative deal-history total.
+            profit = target.profit * (lots / target.volume)
         log_trade_event(
             exec_logger, event="CLOSE_OK", symbol=target.symbol, ticket=ticket,
             volume=lots, price=result.price, latency_ms=round(latency, 1),

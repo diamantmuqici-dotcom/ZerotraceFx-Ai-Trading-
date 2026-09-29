@@ -9,4 +9,4 @@ matplotlib>=3.8
 pytest>=8.0
 pytest-asyncio>=0.23
 # Windows-only extras are optional and installed separately in CI/Release:
-# MetaTrader5 (Python 3.11 wheel available; 3.13 pending) and PySide6
+# MetaTrader5 and PySide6

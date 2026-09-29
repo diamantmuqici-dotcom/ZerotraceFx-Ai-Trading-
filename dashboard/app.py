@@ -200,7 +200,7 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
             titles.addWidget(sub)
             layout.addLayout(titles)
             layout.addSpacing(10)
-            self.mode_pill = W.Pill("PAPER", theme.INFO_TONE, dot=False)
+            self.mode_pill = W.Pill("REAL MT5", theme.GOOD, dot=False)
             self.symbol_pill = W.Pill("—", theme.NEUTRAL, dot=False)
             self.session_pill = W.Pill("NO SESSION", theme.NEUTRAL, dot=False)
             layout.addWidget(self.mode_pill)
@@ -599,8 +599,9 @@ def create_application(viewmodel: DashboardViewModel, refresh_ms: int = 1000):
             else:
                 self.status_pill.set_state("Stopped", theme.NEUTRAL)
             self.kill_banner.setVisible(bool(snap["kill_switch"]))
-            self.mode_pill.set_state(str(snap["mode"]),
-                                     theme.BAD if snap["mode"] == "LIVE" else theme.INFO_TONE)
+            is_real = str(snap["mode"]).upper() == "LIVE"
+            self.mode_pill.set_state("REAL MT5" if is_real else "BLOCKED",
+                                     theme.GOOD if is_real else theme.BAD)
             self.symbol_pill.set_state(str(snap.get("active_symbol") or "NO SYMBOL"),
                                        theme.NEUTRAL)
             self.session_pill.set_state(str(snap.get("session") or "OFF SESSION"),

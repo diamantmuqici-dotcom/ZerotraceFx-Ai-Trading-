@@ -1,0 +1,1 @@
+export function bindSidebar(router){document.querySelectorAll("[data-route]").forEach(link=>link.addEventListener("click",event=>{event.preventDefault();router.go(link.dataset.route)}));return{activate:name=>document.querySelectorAll(".nav-link[data-route]").forEach(link=>link.classList.toggle("is-active",link.dataset.route===name))}}

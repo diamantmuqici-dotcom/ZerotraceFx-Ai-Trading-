@@ -16,11 +16,17 @@ class Settings(BaseSettings):
     )
 
     # --- Account / mode ---
-    account_mode: str = Field(default="PAPER", alias="ACCOUNT_MODE")
-    mt5_login: int = Field(default=0, alias="MT5_LOGIN")
-    mt5_password: str = Field(default="", alias="MT5_PASSWORD")
-    mt5_server: str = Field(default="", alias="MT5_SERVER")
+    # PAPER/BACKTEST remain parseable for legacy research objects, but the
+    # production entry points call ``require_real_mode`` and refuse them.
+    # Keeping that boundary explicit prevents test/research helpers from ever
+    # silently becoming a live broker.
+    account_mode: str = Field(default="LIVE", alias="ACCOUNT_MODE")
     mt5_path: str = Field(default="", alias="MT5_PATH")
+
+    # Authentication is deliberately not a setting. MT5Client only attaches
+    # to the terminal session already authenticated by the operator. MT5_LOGIN,
+    # MT5_PASSWORD and MT5_SERVER are ignored by ``extra=ignore`` above.
+    real_only: bool = Field(default=True, alias="REAL_ONLY")
     symbols: str = Field(default="XAUUSD,EURUSD,GBPUSD,USDJPY", alias="SYMBOLS")
     magic_number: int = Field(default=240901, alias="MAGIC_NUMBER")
 
@@ -112,13 +118,31 @@ class Settings(BaseSettings):
 
     @property
     def mode(self) -> str:
-        """Normalised account mode (PAPER/LIVE/BACKTEST)."""
-        return self.account_mode.strip().upper()
+        """Normalised account mode (PAPER/LIVE/BACKTEST/REAL)."""
+        value = self.account_mode.strip().upper()
+        return "LIVE" if value == "REAL" else value
 
     @property
     def news_csv_path(self) -> Optional[str]:
         """News CSV path or None when not configured."""
         return self.news_csv.strip() or None
+
+    @property
+    def is_real_mode(self) -> bool:
+        """Whether this configuration is allowed to place venue orders."""
+        return self.mode in {"LIVE", "REAL"}
+
+    def require_real_mode(self) -> None:
+        """Reject non-real modes at the production boundary.
+
+        The exception is intentionally raised before a broker is constructed,
+        so paper/backtest settings cannot accidentally create a trading path.
+        """
+        if not self.real_only or not self.is_real_mode:
+            raise ValueError(
+                "ZeroTraceFX AI is real-mode only. Set ACCOUNT_MODE=LIVE and "
+                "attach an already authenticated MT5 terminal."
+            )
 
 
 @lru_cache(maxsize=1)

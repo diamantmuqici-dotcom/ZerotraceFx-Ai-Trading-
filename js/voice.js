@@ -1,0 +1,1 @@
+export function announce(message){if(!localStorage.getItem("zt-voice-alerts"))return;if(!("speechSynthesis" in window))return;window.speechSynthesis.cancel();window.speechSynthesis.speak(new SpeechSynthesisUtterance(message))}

@@ -1,4 +1,9 @@
-"""ZeroTraceEngine: builds and owns every component for paper/live/backtest."""
+"""ZeroTraceEngine: composition root for authenticated real MT5 trading.
+
+Legacy paper/backtest adapters remain importable for deterministic unit tests,
+but the production entry points pass ``allow_research=False`` and cannot
+construct them.
+"""
 from __future__ import annotations
 
 import os
@@ -13,7 +18,7 @@ from live.live_trader import LiveTrader
 from market.data_engine import MarketDataEngine
 from market.filters import EconomicCalendar
 from market.mt5_client import MT5Client
-from paper.paper_broker import PaperBroker
+from mt5.detector import MT5SessionDetector
 from risk.basket import BasketManager
 from risk.risk_manager import RiskManager
 from strategy.ai_engine import AIDecisionEngine
@@ -36,15 +41,26 @@ def default_spec(symbol: str) -> SymbolSpec:
 class ZeroTraceEngine:
     """Composition root: constructs the full trading stack from Settings."""
 
-    def __init__(self, settings: Settings) -> None:
-        """Build all components; connect() brings venues online."""
+    def __init__(self, settings: Settings, allow_research: bool = False) -> None:
+        """Build the stack; production callers must use the real-only boundary.
+
+        ``allow_research`` exists solely for the repository's deterministic
+        research/test adapters. The dashboard, CLI, Electron shell, and
+        release build all pass ``False``.
+        """
+        if not allow_research:
+            # A production launch is never downgraded to a simulator. Legacy
+            # PAPER/BACKTEST values are ignored and the state is made explicit
+            # real-mode before any broker object is constructed.
+            if not settings.is_real_mode:
+                logger.warning("Ignoring non-real ACCOUNT_MODE for production launch")
+                settings.account_mode = "LIVE"
+            settings.real_only = True
         self.settings = settings
         setup_logging(settings.logs_dir, settings.log_level)
         self.state = RuntimeState(mode=settings.mode, basket_target=settings.basket_target)
-        self.mt5 = MT5Client(
-            login=settings.mt5_login, password=settings.mt5_password,
-            server=settings.mt5_server, path=settings.mt5_path,
-        )
+        self.mt5 = MT5Client(path=settings.mt5_path)
+        self.session_detector = MT5SessionDetector(self.mt5)
         self.data = MarketDataEngine(self.mt5, candles_count=settings.candles_count)
         self.learner = AdaptiveLearner(
             path=os.path.join(settings.logs_dir, settings.learning_memory_file),
@@ -69,16 +85,21 @@ class ZeroTraceEngine:
         )
         if settings.news_csv_path:
             self.calendar.load_csv(settings.news_csv_path)
-        self.broker: MT5Executor | PaperBroker
+        self.broker: MT5Executor | object
         if settings.mode == "LIVE":
             self.broker = MT5Executor(self.mt5, magic=settings.magic_number)
         else:
+            if not allow_research:
+                raise RuntimeError("Non-real broker construction is disabled")
+            from paper.paper_broker import PaperBroker
             specs = {s: default_spec(s) for s in settings.symbol_list}
             self.broker = PaperBroker(
                 specs, balance=settings.paper_balance, leverage=settings.leverage,
                 commission_per_lot=settings.commission_per_lot,
                 slippage_pips=settings.slippage_pips,
             )
+        if isinstance(self.broker, MT5Executor):
+            self.state.update(status_message="Waiting for authenticated MT5 session...")
         self.orders = OrderManager(self.broker, max_retries=settings.max_retries)
         self.trader = LiveTrader(
             settings, self.data, self.strategy, self.orders, self.risk,
@@ -107,15 +128,20 @@ class ZeroTraceEngine:
         return len(closes)
 
     def connect(self) -> bool:
-        """Connect the venue and preload offline CSV data for paper mode."""
+        """Attach to an authenticated real terminal; never preload offline data."""
         if isinstance(self.broker, MT5Executor):
             ok = self.broker.connect()
+            venue = self.session_detector.snapshot()
             self.state.update(
-                status_message="Live MT5 connected" if ok else "MT5 connection FAILED",
+                status_message=(
+                    "Authenticated real MT5 connected"
+                    if ok else venue.message
+                ),
                 running=False,
             )
             return ok
-        assert isinstance(self.broker, PaperBroker)
+        # The only remaining branch is the opt-in deterministic research
+        # adapter; production exits through the MT5Executor branch above.
         self.broker.connect()
         loaded = self._preload_csv_feeds()
         account = self.broker.account_info()

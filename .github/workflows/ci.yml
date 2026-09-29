@@ -12,7 +12,7 @@ jobs:
       fail-fast: false
       matrix:
         os: [ubuntu-latest, windows-latest]
-        python: ["3.11", "3.13"]
+        python: ["3.13"]
     runs-on: ${{ matrix.os }}
     steps:
       - uses: actions/checkout@v4
@@ -43,7 +43,7 @@ jobs:
             }
           }
       - name: Byte-compile everything
-        run: python -m compileall -q main.py core config market smart_money strategy execution risk paper live backtest dashboard utils tests
+        run: python -m compileall -q main.py core config ai market smart_money strategy execution risk paper live backtest dashboard remote mt5 database utils tests
       - name: Run test suite
         run: python -m pytest tests/ -q
       - name: CLI smoke test

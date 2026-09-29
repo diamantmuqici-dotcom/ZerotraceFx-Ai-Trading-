@@ -1,0 +1,1 @@
+export function bindSettings(){document.querySelectorAll("[data-action=close-all]").forEach(button=>button.addEventListener("click",()=>document.dispatchEvent(new CustomEvent("zt-close-all"))))}
